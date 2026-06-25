@@ -20,6 +20,8 @@ class Subject(BaseModel):
     """Caller identity passed on each request (demo via HTTP headers)."""
 
     user_id: str
+    given_name: str | None = None
+    family_name: str | None = None
     title: str
     lob: str | None = None
     roles: list[str] = Field(min_length=1)

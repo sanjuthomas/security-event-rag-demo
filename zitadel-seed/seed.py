@@ -187,6 +187,8 @@ def _b64(value: str) -> str:
 def _metadata_entries(user: SeedUser) -> list[dict[str, str]]:
     entries: dict[str, str] = {
         "subject_user_id": user.user_id,
+        "given_name": user.given_name,
+        "family_name": user.family_name,
         "title": user.title,
         "roles": json.dumps(user.roles, separators=(",", ":")),
     }

@@ -133,6 +133,8 @@ def _instruction_from_request(
         created_by=created_by
         or UserReference(
             user_id=subject.user_id,
+            given_name=subject.given_name,
+            family_name=subject.family_name,
             title=subject.title,
             lob=subject.lob,
             roles=subject.roles,
@@ -463,6 +465,8 @@ class InstructionService:
         )
         instruction.approved_by = UserReference(
             user_id=subject.user_id,
+            given_name=subject.given_name,
+            family_name=subject.family_name,
             title=subject.title,
             lob=subject.lob,
             roles=subject.roles,
@@ -498,6 +502,8 @@ class InstructionService:
         instruction.status = InstructionStatus.REJECTED
         instruction.rejected_by = UserReference(
             user_id=subject.user_id,
+            given_name=subject.given_name,
+            family_name=subject.family_name,
             title=subject.title,
             lob=subject.lob,
             roles=subject.roles,

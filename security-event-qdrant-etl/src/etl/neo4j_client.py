@@ -134,7 +134,14 @@ class Neo4jGraphWriter:
                     await tx.run(
                         """
                         MERGE (u:User {user_id: $user_id})
-                        SET u.title         = coalesce($title, u.title),
+                        SET u.given_name    = coalesce($given_name, u.given_name),
+                            u.family_name   = coalesce($family_name, u.family_name),
+                            u.display_name  = coalesce(
+                                CASE WHEN $family_name IS NOT NULL AND $given_name IS NOT NULL
+                                     THEN $family_name + ', ' + $given_name + ' (' + $user_id + ')'
+                                     ELSE null END,
+                                u.display_name),
+                            u.title         = coalesce($title, u.title),
                             u.lob           = coalesce($lob, u.lob),
                             u.roles         = coalesce($roles, u.roles),
                             u.supervisor_id = coalesce($supervisor_id, u.supervisor_id)
@@ -147,6 +154,8 @@ class Neo4jGraphWriter:
                         MERGE (u)-[:BELONGS_TO]->(p)
                         """,
                         user_id=actor["user_id"],
+                        given_name=actor.get("given_name"),
+                        family_name=actor.get("family_name"),
                         title=actor.get("title"),
                         lob=actor.get("lob"),
                         roles=_roles_json(actor.get("roles")),
@@ -307,7 +316,14 @@ class Neo4jGraphWriter:
                         await tx.run(
                             """
                             MERGE (u:User {user_id: $user_id})
-                            SET u.title         = coalesce($title, u.title),
+                            SET u.given_name    = coalesce($given_name, u.given_name),
+                                u.family_name   = coalesce($family_name, u.family_name),
+                                u.display_name  = coalesce(
+                                    CASE WHEN $family_name IS NOT NULL AND $given_name IS NOT NULL
+                                         THEN $family_name + ', ' + $given_name + ' (' + $user_id + ')'
+                                         ELSE null END,
+                                    u.display_name),
+                                u.title         = coalesce($title, u.title),
                                 u.lob           = coalesce($lob, u.lob),
                                 u.supervisor_id = coalesce($supervisor_id, u.supervisor_id)
                             WITH u
@@ -319,6 +335,8 @@ class Neo4jGraphWriter:
                             MERGE (u)-[:BELONGS_TO]->(p)
                             """,
                             user_id=created_by["user_id"],
+                            given_name=created_by.get("given_name"),
+                            family_name=created_by.get("family_name"),
                             title=created_by.get("title"),
                             lob=created_by.get("lob"),
                             supervisor_id=created_by.get("supervisor_id"),
@@ -340,7 +358,14 @@ class Neo4jGraphWriter:
                         await tx.run(
                             """
                             MERGE (u:User {user_id: $user_id})
-                            SET u.title         = coalesce($title, u.title),
+                            SET u.given_name    = coalesce($given_name, u.given_name),
+                                u.family_name   = coalesce($family_name, u.family_name),
+                                u.display_name  = coalesce(
+                                    CASE WHEN $family_name IS NOT NULL AND $given_name IS NOT NULL
+                                         THEN $family_name + ', ' + $given_name + ' (' + $user_id + ')'
+                                         ELSE null END,
+                                    u.display_name),
+                                u.title         = coalesce($title, u.title),
                                 u.lob           = coalesce($lob, u.lob),
                                 u.supervisor_id = coalesce($supervisor_id, u.supervisor_id)
                             WITH u
@@ -352,6 +377,8 @@ class Neo4jGraphWriter:
                             MERGE (u)-[:BELONGS_TO]->(p)
                             """,
                             user_id=approved_by["user_id"],
+                            given_name=approved_by.get("given_name"),
+                            family_name=approved_by.get("family_name"),
                             title=approved_by.get("title"),
                             lob=approved_by.get("lob"),
                             supervisor_id=approved_by.get("supervisor_id"),
@@ -384,7 +411,14 @@ class Neo4jGraphWriter:
                         await tx.run(
                             """
                             MERGE (u:User {user_id: $user_id})
-                            SET u.title         = coalesce($title, u.title),
+                            SET u.given_name    = coalesce($given_name, u.given_name),
+                                u.family_name   = coalesce($family_name, u.family_name),
+                                u.display_name  = coalesce(
+                                    CASE WHEN $family_name IS NOT NULL AND $given_name IS NOT NULL
+                                         THEN $family_name + ', ' + $given_name + ' (' + $user_id + ')'
+                                         ELSE null END,
+                                    u.display_name),
+                                u.title         = coalesce($title, u.title),
                                 u.lob           = coalesce($lob, u.lob),
                                 u.supervisor_id = coalesce($supervisor_id, u.supervisor_id)
                             WITH u
@@ -396,6 +430,8 @@ class Neo4jGraphWriter:
                             MERGE (u)-[:BELONGS_TO]->(p)
                             """,
                             user_id=rejected_by["user_id"],
+                            given_name=rejected_by.get("given_name"),
+                            family_name=rejected_by.get("family_name"),
                             title=rejected_by.get("title"),
                             lob=rejected_by.get("lob"),
                             supervisor_id=rejected_by.get("supervisor_id"),

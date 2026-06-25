@@ -98,6 +98,8 @@ def _subject_from_metadata(
     supervisor_id = metadata.get("supervisor_id")
     return Subject(
         user_id=user_id,
+        given_name=metadata.get("given_name") or None,
+        family_name=metadata.get("family_name") or None,
         title=title,
         lob=lob,
         roles=roles,

@@ -253,10 +253,19 @@ class FundingAccount(BaseModel):
 
 class UserReference(BaseModel):
     user_id: str
+    given_name: str | None = None
+    family_name: str | None = None
     title: str
     lob: OwningLob | None = None
     roles: list[str]
     supervisor_id: str | None = None
+
+    @property
+    def display_name(self) -> str:
+        """'Family, Given (user_id)' when names are known, else just user_id."""
+        if self.family_name and self.given_name:
+            return f"{self.family_name}, {self.given_name} ({self.user_id})"
+        return self.user_id
 
     @field_validator("lob")
     @classmethod
