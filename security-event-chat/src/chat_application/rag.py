@@ -67,7 +67,12 @@ class RagService:
         merged = self._merge_with_exact(exact_hits, vector_hits, bm25_hits, graph_hits)
         retrieval_ms = (time.perf_counter() - started) * 1000
 
-        context = self._build_context(merged, graph_result["rows"], graph_result.get("cypher"))
+        context = self._build_context(
+            merged,
+            graph_result["rows"],
+            graph_result.get("cypher"),
+            graph_unavailable=graph_result.get("graph_unavailable", False),
+        )
         chat_history = [{"role": m.role, "content": m.content} for m in history[-8:]]
 
         gen_started = time.perf_counter()
@@ -144,21 +149,31 @@ class RagService:
             rows = await self.neo4j.run_cypher(cypher)
             return {"cypher": cypher, "rows": rows}
         except ValueError as exc:
-            # Cypher failed application-side read-only validation — log the
-            # rejected query so we can inspect what the LLM generated.
-            logger.warning("Cypher validation rejected LLM query — %s | query=%r", exc, cypher)
-            return {"cypher": cypher, "rows": [], "error": str(exc), "validation_error": True}
+            # Log the rejected query for auditability but do NOT surface it
+            # upward — the caller will still use vector and BM25 results.
+            logger.warning(
+                "Cypher validation rejected LLM query — %s | query=%r", exc, cypher
+            )
+            return {"cypher": None, "rows": [], "graph_unavailable": True}
         except Exception as exc:
             logger.warning("graph search failed: %s", exc)
-            return {"cypher": cypher, "rows": [], "error": str(exc)}
+            return {"cypher": None, "rows": [], "graph_unavailable": True}
 
     @staticmethod
     def _build_context(
         hits: list[RankedHit],
         graph_rows: list[dict[str, Any]],
         cypher: str | None,
+        *,
+        graph_unavailable: bool = False,
     ) -> str:
         sections: list[str] = []
+
+        if graph_unavailable:
+            sections.append(
+                "Note: graph search was unavailable for this question. "
+                "Answer using the retrieved vector and BM25 results below only."
+            )
 
         if cypher:
             sections.append(f"Neo4j Cypher executed:\n{cypher}")
