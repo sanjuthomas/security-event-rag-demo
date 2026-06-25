@@ -63,12 +63,11 @@ flowchart TB
 
     ZITADEL --> ILM
     ZITADEL --> HARNESS
-    ZITADEL --> ETL
     ILM --> OPA
     ILM --> MONGO
-    ILM --> KAFKA
+    ILM -->|instruction-security-events| KAFKA
+    ILM -->|ssi-instructions| KAFKA
     KAFKA --> ETL
-    ETL -->|GET /api/v1/instructions/:id| ILM
     ETL --> QD
     ETL --> NEO
     ETL --> OLLAMA
@@ -80,11 +79,9 @@ flowchart TB
 
 ### Data flow
 
-1. **ILM** — operator creates/mutates an instruction; OPA authorizes the action; instruction version and security event are written to MongoDB **in a single transaction**; the event is published to Kafka.
-2. **ETL** — consumes each Kafka event, authenticates as service user `etl-reader`, fetches the current instruction from ILM API, builds a merged enriched document, upserts a Neo4j graph node/relationships and a Qdrant hybrid point (dense + BM25).
-3. **Chat** — on every user question, runs three retrievers in parallel (Qdrant vector, Qdrant BM25, Ollama-generated Cypher → Neo4j), merges results with reciprocal rank fusion, and synthesises a natural-language answer with Ollama. When the question contains a UUID, the pipeline also performs a deterministic exact lookup in both stores.
-
-**Loop prevention:** ILM suppresses security event emission for `etl-reader` via `SECURITY_EVENT_EXCLUDED_USER_IDS` so ETL enrichment reads never re-trigger Kafka.
+1. **ILM** — operator creates/mutates an instruction; ZITADEL JWT is validated; OPA authorizes the action; instruction version and security event are written to MongoDB **in a single transaction**; two Kafka fact events are published — one to `instruction-security-events` (security event + full instruction snapshot) and one to `ssi-instructions` (instruction state fact).
+2. **ETL** — runs two independent Kafka consumers. The **SecurityEventPipeline** consumes `instruction-security-events` and upserts a Neo4j security-event subgraph and a Qdrant hybrid point tagged `source=security_event`. The **InstructionPipeline** consumes `ssi-instructions` and upserts the instruction master graph in Neo4j and a Qdrant point tagged `source=instruction_state`. Both pipelines are **self-contained** — every fact event carries the full instruction snapshot, so no API callbacks to the ILM are needed.
+3. **Chat** — on every user question, selects a retrieval mode (`events` / `instructions` / `both`), runs three retrievers in parallel (Qdrant vector + BM25 filtered by source tag, Ollama-generated Cypher → Neo4j), merges results with reciprocal rank fusion, and synthesises a natural-language answer with Ollama. When the question contains a UUID, the pipeline also performs a deterministic exact lookup in both stores.
 
 ---
 
@@ -114,6 +111,65 @@ Key reasons:
 - **Backpressure isolation** — a spike in instruction activity does not block the ILM. The ETL processes at its own pace; the Kafka topic absorbs the burst.
 
 In this demo Kafka runs as a single broker with no replication, which is appropriate for local development. A production deployment would use a multi-broker cluster with `replication.factor=3` and `min.insync.replicas=2`.
+
+---
+
+### Why ZITADEL?
+
+**What ZITADEL is:** ZITADEL is an open-source cloud-native identity and access management (IAM) platform — think self-hosted Auth0 or Okta. It provides OIDC/OAuth2 authentication, JWT issuance, user management, and metadata storage. In this demo it runs entirely in Docker with no external dependencies.
+
+**How ZITADEL is used:**
+
+Every request to the ILM carries a ZITADEL-issued JWT Bearer token. The ILM validates it against ZITADEL's OIDC discovery endpoint (`/.well-known/openid-configuration`) and extracts the caller's identity — user ID, roles, LOB, and reporting line — from ZITADEL user metadata:
+
+| Metadata key | Meaning | Used for |
+|---|---|---|
+| `subject_user_id` | Business user ID (`mo-100`, `ficc-300`) | Security events, graph nodes |
+| `given_name` / `family_name` | Full name | `display_name` in graph + chat answers |
+| `title` | Seniority (Analyst / VP / MD) | OPA approval matrix |
+| `roles` | JSON array (`INSTRUCTION_CREATOR`, `INSTRUCTION_APPROVER`) | OPA role check |
+| `lob` | Owning profit center (FICC, FX, DESK_*) | OPA LOB ownership check |
+| `supervisor_id` | Direct manager's user ID | Inversion-of-control detection in graph |
+
+This metadata is stored in ZITADEL via the `zitadel-seed/seed.py` script, which reads `users.yaml` and calls the ZITADEL admin API to create users and attach metadata. The ILM decodes and validates this metadata on every authenticated request.
+
+**Why ZITADEL over a simpler alternative:** ZITADEL provides a **user metadata API** that allows arbitrary key-value pairs per user (roles, LOB, supervisor). This means identity attributes that drive authorization policy (LOB ownership, seniority, org hierarchy) live in the identity layer — not hard-coded in the application or duplicated across services. Any service that validates the JWT can read the same canonical user attributes without a separate user-profile API call.
+
+---
+
+### Why OPA?
+
+**What OPA is:** Open Policy Agent is a **policy-as-code** engine. It decouples authorization decisions from application code — the application sends a structured query (`input`) to OPA and receives a boolean decision (allow / deny). Policies are written in **Rego**, a declarative language designed for hierarchical data queries.
+
+**How OPA is used:**
+
+Before every instruction mutation, the ILM submits a structured authorization query to OPA:
+
+```json
+{
+  "input": {
+    "action": "APPROVE",
+    "subject": { "user_id": "mo-100", "title": "Analyst", "roles": ["INSTRUCTION_CREATOR"], "lob": null },
+    "resource": { "instruction_id": "...", "owning_lob": "FICC", "created_by": "mo-100", "status": "PENDING" }
+  }
+}
+```
+
+OPA evaluates the Rego policy bundle and returns `{"result": {"allow": false, "reason": "creator cannot approve their own instruction"}}`. The ILM then either proceeds or emits a **policy denial security event** (severity `ALERT`) to Kafka.
+
+**Key policies enforced:**
+
+| Rule | Rego condition | What it catches |
+|---|---|---|
+| Role gate | `"INSTRUCTION_APPROVER" in subject.roles` | Non-approvers attempting to approve |
+| Creator cannot approve | `subject.user_id != resource.created_by` | Self-approval (cross-approval collusion) |
+| LOB ownership | `subject.lob == resource.owning_lob` | Wrong-desk approval (e.g. FX desk approving FICC instruction) |
+| Status gate | `resource.status == "PENDING"` | Approving an instruction not yet submitted |
+| Role segregation | `"INSTRUCTION_CREATOR" not in subject.roles` | Middle-office creator accounts cannot approve |
+
+**Why policy-as-code matters for this demo:** Every OPA denial becomes an `ALERT`-severity security event in Kafka → Neo4j → Qdrant. The RAG chat can then surface patterns like _"which users triggered the most policy denial alerts?"_ or _"has anyone attempted to approve their own instruction?"_ — questions that only make sense if the policy engine is generating a structured, queryable audit trail rather than just returning 403.
+
+**Why OPA over embedding auth in the ILM:** Policy logic changes independently of application logic. Adding a new rule (e.g. "MD-level approval required for international wire > $10M") requires editing a `.rego` file and reloading OPA — not rebuilding and redeploying the ILM. The `opa-policy-seed` container loads policies from the `opa-policy-seed/policies/` directory at startup.
 
 ---
 
@@ -240,7 +296,7 @@ Embedding throughput with `bge-m3` is approximately **80–120 documents/second*
 | Directory | Role |
 |-----------|------|
 | `instruction-lifecycle-manager` | FastAPI lifecycle API — OPA authorization, Mongo persistence (bi-temporal versioning), Kafka security event publishing, instruction and security event UIs |
-| `security-event-qdrant-etl` | Kafka consumer — enrich events via ILM API → Neo4j graph writer + Qdrant hybrid indexer + search console UI |
+| `security-event-qdrant-etl` | Dual Kafka consumers — SecurityEventPipeline (`instruction-security-events`) + InstructionPipeline (`ssi-instructions`) → Neo4j graph writer + Qdrant hybrid indexer (two point types) + search console UI |
 | `security-event-chat` | RAG chat — triple retrieval (vector + BM25 + Cypher), RRF merge, Ollama answer synthesis |
 | `security-event-test-harness` | ZITADEL-authenticated browser UI to drive create → submit → approve / reject lifecycles |
 | `neo4j-graph-model` | Graph schema docs, Cypher constraints/indexes, example queries |
@@ -353,7 +409,7 @@ All passwords are `Password1!`. Login names follow `{user_id}@ssi.local`.
 | `fx-201` | Amira Hassan | Associate — approver | FX |
 | `fx-300` | Lucas Berger | VP — approver | FX |
 | `rates-201` | Nina Johansson | Associate — approver | DESK_RATES |
-| `etl-reader` | — | Service account — ETL instruction reads | — |
+| `etl-reader` | — | Service account — excluded from security event emission (`SECURITY_EVENT_EXCLUDED_USER_IDS`) | — |
 
 ---
 
