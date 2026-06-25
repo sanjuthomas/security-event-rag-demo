@@ -70,18 +70,30 @@ violations["ALERT_EXPIRED_INSTRUCTION"] if {
     time.now_ns() >= time.parse_rfc3339_ns(input.payment.instruction_end_date)
 }
 
+# ── Approver not in MIDDLE_OFFICE group ───────────────────────────────────────
+# Rule:     Subject holds FUNDING_APPROVER role but is not a member of the
+#           MIDDLE_OFFICE group.  Holding the role alone is insufficient —
+#           the approver must be an active middle-office analyst.
+# Severity: ALERT — role assigned without the required group; potential
+#           misconfiguration or privilege escalation attempt.
+
+violations["ALERT_NOT_MIDDLE_OFFICE_GROUP"] if {
+    input.action == "APPROVE_PAYMENT"
+    has_role("FUNDING_APPROVER")
+    not in_group("MIDDLE_OFFICE")
+}
+
 # ── Desk-coverage (LOB) violation ─────────────────────────────────────────────
-# Rule:     The approver's covering_lobs attribute does not include the
-#           instruction's owning LOB.  Only the middle-office analyst assigned
-#           to cover a particular desk (e.g. FICC) may approve payments routed
-#           through that desk's instructions.
-#           Example: Mike from MIDDLE_OFFICE covers FX but tries to approve a
-#                    FICC payment — this must be blocked and logged.
+# Rule:     The approver is in MIDDLE_OFFICE but their covering_lobs attribute
+#           does not include the instruction's owning LOB.
+#           Example: Mike covers ["FX"] but tries to approve a FICC payment —
+#                    this must be blocked and logged.
 # Severity: ALERT — potential cross-desk interference or collusion attempt.
 
 violations["ALERT_LOB_COVERAGE_VIOLATION"] if {
     input.action == "APPROVE_PAYMENT"
     has_role("FUNDING_APPROVER")
+    in_group("MIDDLE_OFFICE")
     not covers_lob(input.payment.instruction_owning_lob)
 }
 

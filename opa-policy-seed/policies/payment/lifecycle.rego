@@ -5,7 +5,8 @@ default allow := false
 # ---------------------------------------------------------------------------
 # CREATE_PAYMENT
 #
-# Only a PAYMENT_CREATOR may initiate a payment.
+# The PAYMENT_CREATOR role alone is sufficient to initiate a payment.
+# No group membership is required — any staff member with this role may submit.
 #   1. Subject must hold the PAYMENT_CREATOR role.
 #   2. The backing instruction must already be approved (STANDING or SINGLE_USE).
 #   3. The instruction must not be expired.
@@ -33,16 +34,19 @@ allow if {
 # ---------------------------------------------------------------------------
 # APPROVE_PAYMENT
 #
-# Only a FUNDING_APPROVER may authorise a pending payment.
+# Approval requires role + group + desk-coverage — holding the role alone
+# is not sufficient.
 #   1. Subject must hold the FUNDING_APPROVER role.
-#   2. Subject must be a member of the COVERING_LOBS group AND their
-#      covering_lobs attribute must include the instruction's owning LOB.
-#      (Desk-coverage rule: only the analyst covering FICC may approve
-#       payments routed through FICC instructions — even if another analyst
-#       also holds FUNDING_APPROVER.)
-#   3. The backing instruction must still be approved and not expired.
-#   4. Payment amount must be within the approver's club ceiling.
-#   5. The approver must not be the same person who created the payment
+#   2. Subject must be a member of the MIDDLE_OFFICE group.
+#      (Just having the role is not enough — the approver must be an active
+#       middle-office analyst assigned to cover one or more desks.)
+#   3. The approver's covering_lobs attribute must include the instruction's
+#      owning LOB.  An approver may cover multiple LOBs.
+#      Example: Mike covers ["FX"] — he cannot approve a FICC payment even if
+#               he holds FUNDING_APPROVER.
+#   4. The backing instruction must still be approved and not expired.
+#   5. Payment amount must be within the approver's club ceiling.
+#   6. The approver must not be the same person who created the payment
 #      (four-eyes / segregation of duties — applies even when the subject
 #       holds both PAYMENT_CREATOR and FUNDING_APPROVER).
 # ---------------------------------------------------------------------------
@@ -52,7 +56,7 @@ allow if {
 
     has_role("FUNDING_APPROVER")
 
-    in_group("COVERING_LOBS")
+    in_group("MIDDLE_OFFICE")
     covers_lob(input.payment.instruction_owning_lob)
 
     instruction_is_approved

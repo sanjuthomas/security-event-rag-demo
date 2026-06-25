@@ -14,11 +14,12 @@ in_group(group) if {
     group in input.subject.groups
 }
 
-# A subject covers a LOB when they are in the COVERING_LOBS group AND that
-# LOB appears in their covering_lobs metadata attribute.
-# Example: John (MIDDLE_OFFICE) covers FICC → only he can approve FICC payments.
+# A subject covers a LOB when that LOB appears in their covering_lobs
+# metadata attribute (set in ZITADEL).  An approver may cover more than one LOB.
+# MIDDLE_OFFICE group membership is verified separately in lifecycle.rego so
+# this predicate stays a pure data check.
+# Example: John covers ["FICC","FX"] → he can approve payments for both desks.
 covers_lob(lob) if {
-    in_group("COVERING_LOBS")
     lob in input.subject.covering_lobs
 }
 

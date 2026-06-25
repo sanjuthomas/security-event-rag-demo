@@ -5,7 +5,7 @@ has_role(role) if {
 }
 
 is_middle_office if {
-    "MIDDLE_OFFICE" in input.subject.roles
+    "MIDDLE_OFFICE" in input.subject.groups
 }
 
 creator_eligible if {
