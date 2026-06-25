@@ -104,6 +104,50 @@ flowchart TB
 
 ---
 
+## Models
+
+### Embedding model — `bge-m3:latest`
+
+The ETL and Chat use [BAAI/BGE-M3](https://huggingface.co/BAAI/bge-m3) served via Ollama for dense vector embeddings.
+
+| Property | Value |
+|----------|-------|
+| Model | `bge-m3:latest` |
+| Provider | BAAI (Beijing Academy of AI) |
+| Architecture | XLM-RoBERTa-based encoder |
+| Output dimension | **1024** float32 |
+| Context window | 8192 tokens |
+| Strengths | Multilingual (100+ languages), strong on domain-specific financial text, unified dense + sparse + multi-vector |
+
+BGE-M3 is queried through `POST /api/embed` on the local Ollama instance. Each security event document is embedded at write time by the ETL and at query time by the Chat for similarity search.
+
+### Sparse retrieval — `qdrant/bm25`
+
+Alongside dense vectors, both the ETL indexer and Chat retriever use Qdrant's built-in **BM25** sparse encoder (`qdrant/bm25`). BM25 is a classical term-frequency retrieval model — it complements dense semantic search by excelling at exact-match terms like UUIDs, user IDs (`mo-100`, `ficc-300`), and action names (`APPROVE`, `REJECT`).
+
+### Chat / answer model — `qwen3:30b`
+
+The LLM used for Cypher generation and answer synthesis is [Qwen3-30B](https://huggingface.co/Qwen/Qwen3-30B) served via Ollama.
+
+| Property | Value |
+|----------|-------|
+| Model | `qwen3:30b` (default, configurable via `OLLAMA_CHAT_MODEL`) |
+| Provider | Alibaba Cloud — Qwen team |
+| Architecture | Dense transformer, Mixture-of-Experts variant |
+| Parameters | 30B |
+| Context window | 32 768 tokens |
+| Strengths | Strong code and structured output generation (Cypher), instruction following, multilingual |
+
+The model is called twice per user question:
+1. **Cypher generation** — `CYPHER_SYSTEM_PROMPT` + schema + question → a read-only Neo4j Cypher query
+2. **Answer synthesis** — `ANSWER_SYSTEM_PROMPT` + retrieved context → a natural-language answer with event IDs, actors, and LOB attribution
+
+Both calls are made via `POST /api/chat` on the local Ollama instance with `stream: false`.
+
+> To use a different chat model: `OLLAMA_CHAT_MODEL=llama3.1:8b` (or any model pulled via `ollama pull`).
+
+---
+
 ## Prerequisites
 
 | Requirement | Notes |
@@ -299,3 +343,9 @@ Each service reads configuration from environment variables (see its own README 
 ```
 
 Each application directory has its own README.
+
+---
+
+## Chat demo
+
+![Security Event Chat — cross-approval and LOB queries](docs/chat-demo.png)
