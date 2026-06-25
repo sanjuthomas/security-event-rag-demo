@@ -1,0 +1,113 @@
+# SSI cash instruction lifecycle — ZITADEL identity seed
+# Maps to Instruction Lifecycle Manager Subject + OPA policy attributes.
+
+defaults:
+  password: "Password1!"
+  email_domain: ssi.local
+
+users:
+  # --- Middle office (create / submit on behalf of profit centers) ---
+  - user_id: mo-100
+    given_name: Sarah
+    family_name: Chen
+    title: Analyst
+    roles:
+      - INSTRUCTION_CREATOR
+      - MIDDLE_OFFICE
+    supervisor_id: mo-050
+
+  - user_id: mo-101
+    given_name: James
+    family_name: Patel
+    title: Analyst
+    roles:
+      - INSTRUCTION_CREATOR
+      - MIDDLE_OFFICE
+    supervisor_id: mo-050
+
+  - user_id: mo-050
+    given_name: David
+    family_name: Okonkwo
+    title: Vice President
+    roles:
+      - INSTRUCTION_CREATOR
+      - MIDDLE_OFFICE
+    supervisor_id: mo-010
+
+  - user_id: mo-010
+    given_name: Patricia
+    family_name: Walsh
+    title: Managing Director
+    roles:
+      - INSTRUCTION_CREATOR
+      - MIDDLE_OFFICE
+
+  # --- FICC profit center (approve / reject / suspend / use) ---
+  - user_id: ficc-201
+    given_name: Michael
+    family_name: Torres
+    title: Associate
+    lob: FICC
+    roles:
+      - INSTRUCTION_APPROVER
+    supervisor_id: ficc-300
+
+  - user_id: ficc-300
+    given_name: Elena
+    family_name: Vasquez
+    title: Vice President
+    lob: FICC
+    roles:
+      - INSTRUCTION_APPROVER
+    supervisor_id: ficc-400
+
+  - user_id: ficc-400
+    given_name: Robert
+    family_name: Kim
+    title: Managing Director
+    lob: FICC
+    roles:
+      - INSTRUCTION_APPROVER
+
+  - user_id: ficc-500
+    given_name: Caroline
+    family_name: Nguyen
+    title: Partner
+    lob: FICC
+    roles:
+      - INSTRUCTION_APPROVER
+
+  # --- FX profit center ---
+  - user_id: fx-201
+    given_name: Amira
+    family_name: Hassan
+    title: Associate
+    lob: FX
+    roles:
+      - INSTRUCTION_APPROVER
+    supervisor_id: fx-300
+
+  - user_id: fx-300
+    given_name: Lucas
+    family_name: Berger
+    title: Vice President
+    lob: FX
+    roles:
+      - INSTRUCTION_APPROVER
+
+  # --- Other desk profit center ---
+  - user_id: rates-201
+    given_name: Nina
+    family_name: Johansson
+    title: Associate
+    lob: DESK_RATES
+    roles:
+      - INSTRUCTION_APPROVER
+
+  # --- ETL service account (read all instructions via ILM API) ---
+  - user_id: etl-reader
+    given_name: ETL
+    family_name: Reader
+    title: Analyst
+    roles:
+      - MIDDLE_OFFICE

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Security Event</title>
+    <link rel="stylesheet" href="/ui/security-events/static/monitor.css" />
+    <link rel="stylesheet" href="/ui/security-events/static/security-events.css" />
+  </head>
+  <body class="detail-page">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" style="background:#4f8cff;box-shadow:0 0 18px rgba(79,140,255,0.8)"></span>
+        <div>
+          <h1>Security Event</h1>
+          <p id="event-id-subtitle" class="subtitle mono">Loading…</p>
+        </div>
+      </div>
+      <div class="status-group">
+        <a class="btn btn-ghost" href="/ui/security-events/">Back to monitor</a>
+      </div>
+    </header>
+
+    <main class="detail-main">
+      <div id="detail-error" class="detail-error hidden"></div>
+      <div id="detail-summary" class="detail-summary hidden"></div>
+      <section id="detail-json-section" class="detail-json-section hidden">
+        <div class="detail-json-header">
+          <h2>Full event</h2>
+          <button id="copy-json-btn" type="button" class="btn btn-ghost">Copy JSON</button>
+        </div>
+        <pre id="detail-json" class="detail-json"></pre>
+      </section>
+    </main>
+
+    <script src="/ui/security-events/static/event.js"></script>
+  </body>
+</html>

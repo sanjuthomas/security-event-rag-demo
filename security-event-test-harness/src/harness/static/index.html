@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Test Harness</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark"></span>
+        <div>
+          <h1>Instruction Test Harness</h1>
+          <p class="subtitle">Generate lifecycle data for end-to-end ETL testing</p>
+        </div>
+      </div>
+      <div class="status-group">
+        <div id="pat-status" class="status-pill status-connecting">Checking</div>
+        <div class="stat">
+          <span class="stat-label">Instructions</span>
+          <span id="stat-instructions" class="stat-value">—</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Security events</span>
+          <span id="stat-events" class="stat-value">—</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="panel">
+        <h2>Lifecycle actions</h2>
+        <p class="panel-intro">
+          Enter a count and run an action. Each button drives the ILM API with seeded ZITADEL users.
+        </p>
+
+        <div class="action-grid" id="action-grid">
+          <article class="action-card" data-action="create-instructions">
+            <h3>Create instructions</h3>
+            <p>Create draft instructions with varied LOB, type, and creator.</p>
+            <div class="action-controls">
+              <input type="number" min="1" max="500" value="10" aria-label="Count" />
+              <button type="button" class="btn-primary">Create</button>
+            </div>
+          </article>
+
+          <article class="action-card" data-action="submit-instructions">
+            <h3>Submit instructions</h3>
+            <p>Submit up to N DRAFT instructions as middle office (mo-100).</p>
+            <div class="action-controls">
+              <input type="number" min="1" max="500" value="5" aria-label="Count" />
+              <button type="button" class="btn-primary">Submit</button>
+            </div>
+          </article>
+
+          <article class="action-card" data-action="approve-instructions">
+            <h3>Approve instructions</h3>
+            <p>Submit (if needed) and approve up to N DRAFT/PENDING instructions.</p>
+            <div class="action-controls">
+              <input type="number" min="1" max="500" value="2" aria-label="Count" />
+              <button type="button" class="btn-primary">Approve</button>
+            </div>
+          </article>
+
+          <article class="action-card" data-action="reject-instructions">
+            <h3>Reject instructions</h3>
+            <p>Reject up to N PENDING instructions with a seeded approver.</p>
+            <div class="action-controls">
+              <input type="number" min="1" max="500" value="1" aria-label="Count" />
+              <button type="button" class="btn-warn">Reject</button>
+            </div>
+          </article>
+
+          <article class="action-card action-card-wide" data-action="run-policy-scenario">
+            <h3>Run policy scenario</h3>
+            <p>
+              Execute the fixed 9-step OPA policy harness (create, deny, submit, approve, list versions).
+            </p>
+            <div class="action-controls">
+              <button type="button" class="btn-secondary">Run scenario</button>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="panel log-panel">
+        <div class="log-header">
+          <h2>Output</h2>
+          <button type="button" id="clear-log" class="btn-ghost">Clear</button>
+        </div>
+        <pre id="log-output" class="log-output" aria-live="polite"></pre>
+      </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>

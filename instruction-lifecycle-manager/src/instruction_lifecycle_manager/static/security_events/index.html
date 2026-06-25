@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Security Event Monitor</title>
+    <link rel="stylesheet" href="/ui/security-events/static/monitor.css" />
+    <link rel="stylesheet" href="/ui/security-events/static/security-events.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" style="background:#4f8cff;box-shadow:0 0 18px rgba(79,140,255,0.8)"></span>
+        <div>
+          <h1>Security Event Monitor</h1>
+          <p class="subtitle">MongoDB change stream · instruction-lifecycle-manager</p>
+        </div>
+      </div>
+      <div class="status-group">
+        <nav class="nav-links" aria-label="ILM views">
+          <a href="/ui/">Instructions</a>
+          <a href="/ui/security-events/" class="active">Security events</a>
+        </nav>
+        <div id="connection-status" class="status-pill status-connecting">Connecting</div>
+        <div class="stat">
+          <span class="stat-label">Shown</span>
+          <span id="stat-total" class="stat-value">0</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">INFO</span>
+          <span id="stat-info" class="stat-value info">0</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">ALERT</span>
+          <span id="stat-alert" class="stat-value alert">0</span>
+        </div>
+      </div>
+    </header>
+
+    <section class="toolbar">
+      <label class="filter">
+        Severity
+        <select id="severity-filter">
+          <option value="ALL">All</option>
+          <option value="INFO">INFO</option>
+          <option value="ALERT">ALERT</option>
+        </select>
+      </label>
+      <label class="filter">
+        Action
+        <select id="action-filter">
+          <option value="ALL">All</option>
+        </select>
+      </label>
+      <button id="pause-btn" type="button" class="btn">Pause live feed</button>
+      <button id="clear-btn" type="button" class="btn btn-ghost">Clear view</button>
+    </section>
+
+    <main class="table-wrap">
+      <table id="events-table">
+        <thead>
+          <tr>
+            <th class="col-event-id">Event ID</th>
+            <th>Time (UTC)</th>
+            <th>Severity</th>
+            <th>Action</th>
+            <th>Outcome</th>
+            <th>Actor</th>
+            <th>LOB</th>
+            <th>Resource</th>
+            <th>Message</th>
+          </tr>
+        </thead>
+        <tbody id="events-body"></tbody>
+      </table>
+      <div id="empty-state" class="empty-state hidden">
+        Waiting for security events…
+      </div>
+    </main>
+
+    <script src="/ui/security-events/static/app.js"></script>
+  </body>
+</html>

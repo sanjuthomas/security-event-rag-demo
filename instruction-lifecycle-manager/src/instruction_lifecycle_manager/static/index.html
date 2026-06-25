@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Instruction Browser</title>
+    <link rel="stylesheet" href="/ui/static/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark"></span>
+        <div>
+          <h1>Instruction Browser</h1>
+          <p class="subtitle">MongoDB change stream · read-only</p>
+        </div>
+      </div>
+      <div class="status-group">
+        <nav class="nav-links" aria-label="ILM views">
+          <a href="/ui/" class="active">Instructions</a>
+          <a href="/ui/security-events/">Security events</a>
+        </nav>
+        <div id="load-status" class="status-pill status-connecting">Loading</div>
+        <div class="stat">
+          <span class="stat-label">Shown</span>
+          <span id="stat-total" class="stat-value">0</span>
+        </div>
+      </div>
+    </header>
+
+    <section class="toolbar">
+      <label class="filter filter-status">
+        <span class="filter-label">
+          <span>Status</span>
+          <button
+            type="button"
+            class="info-icon"
+            id="status-help-btn"
+            aria-label="What do instruction statuses mean?"
+            aria-expanded="false"
+            aria-controls="status-help-panel"
+          >
+            <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+              <circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.25" />
+              <circle cx="8" cy="5.25" r="0.85" fill="currentColor" />
+              <path d="M7.2 7.4h1.6v4.4H7.2z" fill="currentColor" />
+            </svg>
+          </button>
+        </span>
+        <select id="status-filter">
+          <option value="ALL">All</option>
+        </select>
+        <div id="status-help-panel" class="status-help-panel hidden" role="tooltip">
+          <p class="status-help-intro">Lifecycle states for cash settlement instructions.</p>
+          <dl class="status-help-list">
+            <div>
+              <dt>DRAFT</dt>
+              <dd>Created and editable; not yet submitted for approval.</dd>
+            </div>
+            <div>
+              <dt>PENDING</dt>
+              <dd>Submitted and awaiting an approver decision.</dd>
+            </div>
+            <div>
+              <dt>STANDING</dt>
+              <dd>Approved recurring instruction; available for payment until the end date.</dd>
+            </div>
+            <div>
+              <dt>SINGLE_USE</dt>
+              <dd>Approved one-time instruction; available until used or expired.</dd>
+            </div>
+            <div>
+              <dt>SUSPENDED</dt>
+              <dd>Temporarily blocked by an approver; can be reactivated.</dd>
+            </div>
+            <div>
+              <dt>REJECTED</dt>
+              <dd>Declined during approval; cannot be used.</dd>
+            </div>
+            <div>
+              <dt>USED</dt>
+              <dd>Single-use payment executed; instruction fulfilled.</dd>
+            </div>
+            <div>
+              <dt>EXPIRED</dt>
+              <dd>Past end date; no longer available.</dd>
+            </div>
+            <div>
+              <dt>DELETED</dt>
+              <dd>Soft-deleted while draft or pending.</dd>
+            </div>
+          </dl>
+        </div>
+      </label>
+      <label class="filter">
+        Owning LOB
+        <select id="lob-filter">
+          <option value="ALL">All</option>
+        </select>
+      </label>
+      <button id="refresh-btn" type="button" class="btn">Refresh</button>
+      <button id="pause-btn" type="button" class="btn">Pause live feed</button>
+      <button id="clear-btn" type="button" class="btn btn-ghost">Clear view</button>
+    </section>
+
+    <main class="table-wrap">
+      <table id="instructions-table">
+        <thead>
+          <tr>
+            <th class="col-instruction-id">Instruction ID</th>
+            <th>Status</th>
+            <th>Type</th>
+            <th>Owning LOB</th>
+            <th>Wire</th>
+            <th>Created by</th>
+            <th>Created (UTC)</th>
+            <th>Updated (UTC)</th>
+            <th>Ver</th>
+          </tr>
+        </thead>
+        <tbody id="instructions-body"></tbody>
+      </table>
+      <div id="empty-state" class="empty-state hidden">No instructions found.</div>
+    </main>
+
+    <script src="/ui/static/app.js"></script>
+  </body>
+</html>

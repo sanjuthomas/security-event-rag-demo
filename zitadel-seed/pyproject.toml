@@ -1,0 +1,24 @@
+[project]
+name = "zitadel-seed"
+version = "0.1.0"
+description = "Load SSI test identities into ZITADEL via the management API"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.28.0",
+    "pyyaml>=6.0.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.6.0",
+]
+
+[project.scripts]
+zitadel-seed = "seed:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+only-include = ["seed.py", "users.yaml"]
+
+[tool.hatch.build.targets.sdist]
+only-include = ["seed.py", "users.yaml", "pyproject.toml"]

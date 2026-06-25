@@ -1,0 +1,25 @@
+[project]
+name = "instruction-lifecycle-manager"
+version = "0.1.0"
+description = "REST API for cash wire settlement instruction lifecycle (ISO 20022)"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "motor>=3.6.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.6.0",
+    "httpx>=0.28.0",
+    "PyJWT[crypto]>=2.10.0",
+    "aiokafka>=0.12.0",
+]
+
+[project.scripts]
+instruction-lifecycle-manager = "instruction_lifecycle_manager.main:run"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/instruction_lifecycle_manager"]

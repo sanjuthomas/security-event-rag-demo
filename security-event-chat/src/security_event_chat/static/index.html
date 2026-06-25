@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Security Event Chat</title>
+    <link rel="stylesheet" href="/static/styles.css?v=1" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark"></span>
+        <div>
+          <h1>Security Event Chat</h1>
+          <p class="subtitle">Vector · BM25 · Neo4j · Ollama</p>
+        </div>
+      </div>
+      <div class="topbar-links">
+        <a href="http://localhost:8090" target="_blank" rel="noopener">Search console</a>
+        <a href="http://localhost:8000/ui/security-events/" target="_blank" rel="noopener">Event monitor</a>
+      </div>
+    </header>
+
+    <main class="chat-layout">
+      <section class="chat-panel">
+        <div id="chat-thread" class="chat-thread" aria-live="polite">
+          <div class="message assistant">
+            <div class="message-role">Assistant</div>
+            <div class="message-body">
+              Ask about instruction lifecycle security events — who created or approved
+              instructions, rejections, alerts, counts by wire scope, and more. Retrieval
+              runs vector, BM25, and Neo4j (Cypher) automatically.
+            </div>
+          </div>
+        </div>
+
+        <form id="chat-form" class="chat-form">
+          <label class="sr-only" for="chat-input">Your question</label>
+          <textarea
+            id="chat-input"
+            rows="3"
+            placeholder="e.g. How many instructions were created today?"
+            required
+          ></textarea>
+          <div class="chat-actions">
+            <button type="button" id="clear-btn" class="btn btn-ghost">Clear chat</button>
+            <button type="submit" id="send-btn" class="btn-primary">Send</button>
+          </div>
+        </form>
+      </section>
+
+      <aside class="meta-panel">
+        <h2>Last retrieval</h2>
+        <div id="meta-empty" class="muted">Send a question to see sources and Cypher.</div>
+        <div id="meta-content" class="hidden">
+          <div class="meta-block">
+            <h3>Timing</h3>
+            <p id="meta-timing" class="mono muted"></p>
+          </div>
+          <div class="meta-block">
+            <h3>Neo4j Cypher</h3>
+            <pre id="meta-cypher" class="code-block"></pre>
+          </div>
+          <div class="meta-block">
+            <h3>Sources</h3>
+            <div id="meta-sources" class="sources-list"></div>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <script src="/static/app.js?v=1"></script>
+  </body>
+</html>

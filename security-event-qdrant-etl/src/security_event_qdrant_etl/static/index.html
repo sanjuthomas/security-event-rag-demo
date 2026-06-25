@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Security Event Search</title>
+    <link rel="stylesheet" href="/static/styles.css?v=5" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark"></span>
+        <div>
+          <h1>Security Event Search</h1>
+          <p class="subtitle">Neo4j graph · Qdrant dense · BM25 · hybrid RRF</p>
+        </div>
+      </div>
+      <div class="status-group">
+        <a class="btn btn-ghost" href="http://localhost:8000/ui/security-events/" target="_blank" rel="noopener">ILM monitor</a>
+      </div>
+    </header>
+
+    <section class="components-bar" aria-label="Connected components">
+      <div id="components-grid" class="components-grid">
+        <div class="component-card status-connecting">Loading component status…</div>
+      </div>
+    </section>
+
+    <main class="layout">
+      <section class="panel search-panel">
+        <div class="mode-tabs" role="tablist" aria-label="Search mode">
+          <button type="button" class="mode-tab active" data-mode="hybrid">Hybrid</button>
+          <button type="button" class="mode-tab" data-mode="vector">Vector</button>
+          <button type="button" class="mode-tab" data-mode="bm25">BM25</button>
+          <button type="button" class="mode-tab" data-mode="neo4j">Neo4j</button>
+        </div>
+
+        <p id="mode-hint" class="mode-hint">Dense + BM25 with reciprocal rank fusion.</p>
+
+        <form id="search-form" class="search-form">
+          <label class="field" for="query-input">
+            <span class="field-label">Query</span>
+            <textarea
+              id="query-input"
+              name="query"
+              rows="4"
+              placeholder="e.g. FICC approval denied by policy"
+              required
+            ></textarea>
+          </label>
+
+          <div class="search-controls">
+            <label class="field field-inline" for="limit-input">
+              <span class="field-label">Limit</span>
+              <input id="limit-input" type="number" min="1" max="50" value="10" />
+            </label>
+
+            <div id="neo4j-action-wrap" class="field field-inline hidden" aria-hidden="true">
+              <label class="field-label" for="neo4j-action-input">Action filter</label>
+              <input id="neo4j-action-input" type="text" placeholder="e.g. CREATE" />
+            </div>
+
+            <button type="submit" id="search-btn" class="btn-primary">Search</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel results-panel">
+        <div class="results-header">
+          <div>
+            <h2 id="results-title">Results</h2>
+            <p id="results-meta" class="muted"></p>
+          </div>
+          <button type="button" id="clear-results-btn" class="btn btn-ghost hidden">Clear</button>
+        </div>
+
+        <div id="results-empty" class="empty-state">
+          Run a search to query indexed security events.
+        </div>
+        <div id="results-list" class="results-list hidden"></div>
+        <pre id="results-detail" class="results-detail hidden" aria-label="Result detail JSON"></pre>
+      </section>
+    </main>
+
+    <script src="/static/app.js?v=5"></script>
+  </body>
+</html>

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Instruction</title>
+    <link rel="stylesheet" href="/ui/static/styles.css" />
+  </head>
+  <body class="detail-page">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark"></span>
+        <div>
+          <h1>Instruction</h1>
+          <p id="instruction-id-subtitle" class="subtitle mono">Loading…</p>
+        </div>
+      </div>
+      <div class="status-group">
+        <a class="btn btn-ghost" href="/ui/">Back to browser</a>
+      </div>
+    </header>
+
+    <main class="detail-main">
+      <div id="detail-error" class="detail-error hidden"></div>
+      <div id="detail-summary" class="detail-summary hidden"></div>
+      <section id="detail-json-section" class="detail-json-section hidden">
+        <div class="detail-json-header">
+          <h2>Full instruction</h2>
+          <button id="copy-json-btn" type="button" class="btn btn-ghost">Copy JSON</button>
+        </div>
+        <pre id="detail-json" class="detail-json"></pre>
+      </section>
+    </main>
+
+    <script src="/ui/static/instruction.js"></script>
+  </body>
+</html>
