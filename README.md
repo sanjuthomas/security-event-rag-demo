@@ -74,6 +74,138 @@ flowchart TB
 
 ---
 
+### Why MongoDB for security events?
+
+Security events are **write-heavy, append-only, and schema-flexible**. Different event actions (CREATE, APPROVE, REJECT, VIEW) carry different payloads — a rejection includes a reason, an approval includes the approver's LOB, a VIEW includes a resource path. A fixed relational schema would require either nullable columns for every possible field or a separate table per event type, both of which complicate queries.
+
+MongoDB fits naturally because:
+
+- **Schemaless documents** — each event is stored as-is with no schema migration when new fields are added. New event types or enrichment fields can be introduced without downtime.
+- **Long-term retention** — MongoDB's native **TTL indexes** allow per-collection expiry policies. Security events for regulatory audit trails can be retained for years on cheap storage (or tiered to Atlas Online Archive), while transient operational events expire automatically. A single `db.createIndex({"timestamp": 1}, {expireAfterSeconds: N})` declaration governs the lifecycle.
+- **Bi-temporal versioning** — instructions are stored as versioned documents (`version_number`, `in`/`out` timestamps). MongoDB's document model stores the entire version as a self-contained snapshot alongside its lifecycle metadata without JOIN complexity.
+- **Change Streams** — the ILM's live security-event monitor and the `SecurityEventWatcher` for real-time UI updates both consume MongoDB Change Streams, which provide ordered, resumable change feeds without an external CDC layer.
+- **Replica set transactions** — writing an instruction version and its security event in a single ACID multi-document transaction requires a MongoDB replica set, which `docker-compose.yml` initialises automatically as `rs0`.
+
+---
+
+### Why Kafka?
+
+Every instruction mutation produces a **security event** — a structured audit record of who did what to which instruction and when. Kafka decouples the producers of those events (ILM) from every consumer that needs them.
+
+Key reasons:
+
+- **Fan-out with no coupling** — any new consumer (compliance reporting tool, real-time fraud detector, ML feature pipeline, a second ETL feeding a different vector store) can subscribe to the `security-events` topic independently without any change to the ILM. The ILM publishes once; consumers scale independently.
+- **Durable replay** — Kafka retains events on disk for a configurable retention window. If the ETL falls behind, restarts, or needs to reprocess a backfill, it can seek back to any offset and replay without touching the ILM.
+- **Ordered delivery per partition** — events for the same instruction arrive in order, which matters for the ETL's `CURRENT` relationship management in Neo4j (it only promotes a new version if its `version_number` is higher than the current one).
+- **Backpressure isolation** — a spike in instruction activity does not block the ILM. The ETL processes at its own pace; the Kafka topic absorbs the burst.
+
+In this demo Kafka runs as a single broker with no replication, which is appropriate for local development. A production deployment would use a multi-broker cluster with `replication.factor=3` and `min.insync.replicas=2`.
+
+---
+
+### Why Qdrant + BM25 (hybrid search)?
+
+No single retrieval strategy reliably handles the full range of questions a user asks over security events.
+
+**Dense vector search** (via `bge-m3` embeddings) excels at **semantic similarity** — "who tried to approve each other's instructions?" or "show me policy denial events for FX desk" — where the meaning matters more than the exact words. But dense search struggles with **exact identifiers**: if the user pastes a UUID like `2f75858d-d845-40d4-b9fb-43951a8c40e2`, the embedding of that string carries little semantic signal and the cosine similarity ranking is unreliable.
+
+**BM25 sparse search** is a classical term-frequency model (the same family as Elasticsearch's default scorer). It excels precisely where dense search fails: **exact-match tokens** — UUIDs, user IDs (`mo-100`, `ficc-300`), action names (`APPROVE`, `REJECT`), currency codes (`USD`, `EUR`). However, BM25 has no concept of synonymy or paraphrase — "declined" and "rejected" are unrelated tokens to BM25.
+
+**Hybrid search** fuses both signals:
+
+```
+score_hybrid(doc) = RRF(rank_dense, rank_bm25)
+                  = 1/(k + rank_dense) + 1/(k + rank_bm25)
+```
+
+Reciprocal Rank Fusion (RRF, Cormack et al. 2009) combines ranked lists without requiring score normalisation. The constant `k=60` dampens the influence of very high ranks. Empirically, hybrid search consistently outperforms either retriever alone in recall@10 across heterogeneous query distributions — a result confirmed in the BEIR benchmark suite and Qdrant's own evaluations.
+
+Qdrant was chosen because it natively supports **named vectors** (one point can carry both a dense 1024-d float32 vector and a BM25 sparse vector), runs hybrid queries server-side, and exposes a clean async Python client. The BM25 sparse encoder (`qdrant/bm25`) runs inside Qdrant itself — no separate sparse-encoder service is needed.
+
+---
+
+### Why Neo4j (knowledge graph)?
+
+The fundamental limitation of vector + BM25 retrieval is that it operates over **flat document similarity**. Each enriched security event is an independent point in the index. Relationships between events — "this approval was done by the same person who created the other instruction", "these two instructions share a creditor account and currency, suggesting a duplicate route" — are **invisible** to a retriever that ranks documents one at a time.
+
+A **knowledge graph** makes those relationships first-class queryable citizens:
+
+```
+(User ficc-300)-[:APPROVED]->(InstructionVersion v2)
+(User mo-100)-[:CREATED]->(InstructionVersion v2)
+(User ficc-300)-[:APPROVED_FOR]->(User mo-100)   ← cross-approval edge
+```
+
+The graph enables questions that are **structurally impossible** with flat retrieval alone:
+
+| Question | Why flat retrieval fails | How Neo4j answers it |
+|---|---|---|
+| Are there users who approved each other's instructions? | Would require joining two separate query results and checking for symmetry | `MATCH (a)-[:APPROVED_FOR]->(b), (b)-[:APPROVED_FOR]->(a)` |
+| What is the full lifecycle timeline of instruction X? | Each event is a separate document — reassembling order requires post-processing | `MATCH (e)-[:TARGETS]->(i) ORDER BY e.timestamp` |
+| Which instructions share the same creditor account? | No link exists between documents for separate instructions | `MATCH (v1)-[:CONFLICTS_WITH]->(v2)` |
+| Who are all the users in the FICC profit center? | Would need keyword search on `lob=FICC` and hope the field is indexed | `MATCH (u)-[:BELONGS_TO]->(p:ProfitCenter {lob: 'FICC'})` |
+
+**Role in improving RAG recall:**
+
+The chat pipeline asks Ollama to generate a Cypher query for every user question. That query runs against Neo4j and returns structured rows (event IDs, user IDs, instruction IDs, timestamps). Those rows are injected into the LLM context alongside the vector and BM25 results. The LLM then synthesises an answer that combines semantic context (from vector search) with precise relational facts (from the graph). Neither source alone would produce a complete, accurate answer for relationship-heavy questions.
+
+The graph also serves as a **cross-validation layer**: if a UUID is present in the question, the pipeline runs a deterministic Cypher lookup (`MATCH (e:SecurityEvent {event_id: $id})-[:TARGETS_VERSION]->(v)`) that is guaranteed to be exact regardless of embedding similarity.
+
+---
+
+### Why Ollama? Why run it on the host?
+
+**What Ollama is:** Ollama is an open-source LLM serving runtime that packages model weights, quantisation, and an HTTP API (`/api/embed`, `/api/chat`) into a single binary. It supports Metal (Apple GPU), CUDA (NVIDIA GPU), and CPU backends and exposes an OpenAI-compatible interface.
+
+**Why run Ollama on the host, not in Docker:** Docker on macOS runs containers inside a Linux VM (via Apple Hypervisor Framework). That VM has **no visibility into the host GPU** — neither Metal nor MPS (Metal Performance Shaders) is accessible from within a Docker container on macOS. Running `ollama` natively on the host means it can use the Apple M1 Max GPU directly via Metal, achieving 4–8× the inference throughput of CPU-only mode. The containers reach the host Ollama instance via `host.docker.internal:11434`.
+
+**Model selection — embedding:**
+
+| Model | Dim | Context | Strengths | Why not used here |
+|---|---|---|---|---|
+| `bge-m3:latest` ✓ | 1024 | 8192 | Multilingual, unified dense+sparse+multi-vector, financial text | — |
+| `nomic-embed-text` | 768 | 8192 | Fast, small, good English recall | Lower dimension, English-only |
+| `mxbai-embed-large` | 1024 | 512 | Strong English MTEB scores | Very short context window |
+| `text-embedding-3-small` (OpenAI) | 1536 | 8191 | High quality | Requires API key, not local |
+
+`bge-m3` was selected for its **8192-token context window** (security event documents with full instruction payloads can be long), its **multilingual capability**, and the fact that it is the only open model that natively supports dense, sparse, and multi-vector retrieval from a single forward pass.
+
+**Model selection — LLM (Cypher generation + answer synthesis):**
+
+| Model | Params | Context | Cypher quality | Notes |
+|---|---|---|---|---|
+| `qwen3:30b` ✓ | 30B | 32 768 | Excellent | Strong structured output, handles complex schema |
+| `llama3.1:8b` | 8B | 128 000 | Good | Fast, lower quality Cypher for multi-hop queries |
+| `mistral:7b` | 7B | 32 768 | Fair | Tends to hallucinate relationship directions |
+| `codellama:13b` | 13B | 16 384 | Good | Strong on code but weaker on natural-language synthesis |
+| `llama3.3:70b` | 70B | 128 000 | Excellent | Too large for M1 Max 64 GB at full precision |
+| `gemma3:27b` | 27B | 128 000 | Very good | Competitive alternative to qwen3:30b |
+
+`qwen3:30b` was selected because it fits comfortably in 64 GB unified memory at 4-bit quantisation (~19 GB), consistently generates correct Cypher for multi-hop graph queries (including `OPTIONAL MATCH` chains and `coalesce` expressions), and produces well-structured natural-language answers that correctly cite event IDs and user names.
+
+> To swap models: `OLLAMA_CHAT_MODEL=gemma3:27b` (or any model pulled via `ollama pull`).
+
+---
+
+### Test hardware
+
+All models and benchmarks in this demo were run on the following hardware:
+
+| Component | Specification |
+|---|---|
+| Chip | Apple M1 Max |
+| Unified RAM | 64 GB |
+| GPU cores | 32 (built-in, Metal 3) |
+| GPU vendor | Apple (0x106b) |
+| GPU bus | Built-in (unified memory — no PCIe transfer overhead) |
+| Metal support | Metal 3 |
+
+The unified memory architecture means the CPU, GPU, and Neural Engine share the same 64 GB pool with no PCIe copy overhead between host and device memory. This is particularly advantageous for LLM inference: `qwen3:30b` at Q4_K_M quantisation (~19 GB) fits entirely in GPU-accessible memory, achieving approximately **25–35 tokens/second** generation throughput on the 32-core GPU via Ollama's Metal backend.
+
+Embedding throughput with `bge-m3` is approximately **80–120 documents/second** for typical security event document lengths, which is sufficient for real-time ETL indexing at the event rates generated by this demo.
+
+---
+
 ## Services
 
 | URL | Service | Purpose |
