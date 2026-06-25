@@ -1,0 +1,54 @@
+package payment.lifecycle
+
+# ---------------------------------------------------------------------------
+# Subject helpers
+# ---------------------------------------------------------------------------
+
+# True when the acting subject holds the named role.
+has_role(role) if {
+    role in input.subject.roles
+}
+
+# True when the acting subject is a member of the named ZITADEL group.
+in_group(group) if {
+    group in input.subject.groups
+}
+
+# A subject covers a LOB when they are in the COVERING_LOBS group AND that
+# LOB appears in their covering_lobs metadata attribute.
+# Example: John (MIDDLE_OFFICE) covers FICC → only he can approve FICC payments.
+covers_lob(lob) if {
+    in_group("COVERING_LOBS")
+    lob in input.subject.covering_lobs
+}
+
+# ---------------------------------------------------------------------------
+# Instruction helpers
+# ---------------------------------------------------------------------------
+
+# A payment may only be initiated or approved against a fully-approved
+# instruction.  In the SSI lifecycle that means status STANDING or SINGLE_USE.
+instruction_is_approved if {
+    input.payment.instruction_status in {"STANDING", "SINGLE_USE"}
+}
+
+# Instruction must not be expired.
+instruction_not_expired if {
+    input.payment.instruction_end_date != ""
+    time.now_ns() < time.parse_rfc3339_ns(input.payment.instruction_end_date)
+}
+
+# No end_date means no expiry constraint.
+instruction_not_expired if {
+    input.payment.instruction_end_date == ""
+}
+
+# ---------------------------------------------------------------------------
+# Payment helpers
+# ---------------------------------------------------------------------------
+
+# Segregation of duties: the person who created the payment cannot also be
+# its approver.
+payment_creator_is_not_approver if {
+    input.subject.user_id != input.payment.created_by.user_id
+}
