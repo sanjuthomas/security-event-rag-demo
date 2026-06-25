@@ -434,41 +434,78 @@ Lifecycle: `DRAFT` → `PENDING` → `STANDING | SINGLE_USE` or `REJECTED` → `
 
 ## Neo4j graph model
 
-The ETL builds a graph around each security event:
+Two ETL pipelines write to the **same Neo4j database**, producing two complementary sub-graphs that share nodes (`Instruction`, `InstructionVersion`, `User`, `ProfitCenter`).
+
+### Graph 1 — Security Event Graph
+Built by `SecurityEventPipeline` from the `instruction-security-events` topic.
+Answers: _who triggered this event, what severity, what instruction was touched, which actor caused a policy denial?_
 
 ```mermaid
 flowchart TB
-    U1[User actor] -->|ACTED_AS| SE[SecurityEvent]
+    UA[User actor] -->|ACTED_AS| SE[SecurityEvent]
     SE -->|TARGETS| I[Instruction]
     SE -->|TARGETS_VERSION| IV[InstructionVersion]
     SE -->|INVOLVES_LOB| PC[ProfitCenter]
     I -->|HAS_VERSION| IV
     I -->|CURRENT| IV
-    U2[User creator] -->|CREATED| IV
-    U3[User approver] -->|APPROVED| IV
-    U4[User rejector] -->|REJECTED| IV
+    UC[User creator] -->|CREATED| IV
+    UAP[User approver] -->|APPROVED| IV
+    UR[User rejector] -->|REJECTED| IV
 ```
 
-Example Cypher queries:
+### Graph 2 — Instruction Master Graph
+Built by `InstructionPipeline` from the `ssi-instructions` topic.
+Answers: _what is the current state of an instruction, who approved it, are there duplicate settlement routes, did a subordinate approve their manager's instruction?_
+
+```mermaid
+flowchart TB
+    I[Instruction] -->|HAS_VERSION| IV[InstructionVersion]
+    I -->|CURRENT| IV
+    I -->|OWNED_BY| PC[ProfitCenter]
+    IV -->|BELONGS_TO| PC
+    I1[Instruction A] -->|CONFLICTS_WITH| I2[Instruction B]
+    UC[User creator] -->|CREATED| IV
+    UAP[User approver] -->|APPROVED| IV
+    UAP -->|APPROVED_FOR| I
+    UR[User rejector] -->|REJECTED| IV
+    UM[User actor] -->|MUTATED| IV
+```
+
+The `CURRENT` relationship is **version-aware** — it only advances forward and is never overwritten by an older version arriving out of order.
+
+Because the two graphs share nodes, cross-graph queries work naturally:
 
 ```cypher
--- Instructions created today
-MATCH (e:SecurityEvent {action: 'CREATE', outcome: 'success'})
-WHERE date(datetime(e.timestamp)) = date()
-RETURN count(DISTINCT e) AS total;
-
--- Who created instructions rejected by Michael (ficc-201)
-MATCH (u:User {user_id: 'ficc-201'})-[:ACTED_AS]->(e:SecurityEvent {action: 'REJECT'})
+-- ALERT event actor + current instruction state in one query
+MATCH (actor:User)-[:ACTED_AS]->(e:SecurityEvent {severity: 'ALERT'})
 MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
-RETURN e.event_id, v.creator_user_id, v.instruction_id
-ORDER BY e.timestamp DESC;
+MATCH (i:Instruction {instruction_id: v.instruction_id})-[:CURRENT]->(cv:InstructionVersion)
+RETURN actor.display_name, e.message, cv.status, cv.owning_lob
+ORDER BY e.timestamp DESC LIMIT 20;
 
--- Instruction linked to a specific security event
-MATCH (e:SecurityEvent {event_id: $id})-[:TARGETS_VERSION]->(v:InstructionVersion)
-RETURN v.instruction_id;
+-- Full lifecycle timeline of an instruction (from instruction master graph)
+MATCH (i:Instruction {instruction_id: $uuid})-[:HAS_VERSION]->(v:InstructionVersion)
+OPTIONAL MATCH (actor:User)-[:MUTATED]->(v)
+RETURN v.version_number, v.action, v.status, v.timestamp,
+       coalesce(actor.display_name, actor.user_id) AS actor
+ORDER BY v.version_number ASC LIMIT 50;
+
+-- Mutual approval (collusion signal)
+MATCH (a:User)-[:APPROVED]->(va:InstructionVersion)<-[:CREATED]-(b:User)
+MATCH (b)-[:APPROVED]->(vb:InstructionVersion)<-[:CREATED]-(a)
+WHERE a.user_id <> b.user_id
+RETURN a.display_name AS user_a, b.display_name AS user_b,
+       va.instruction_id AS approved_by_a, vb.instruction_id AS approved_by_b;
+
+-- Potential duplicate settlement routes
+MATCH (i1:Instruction)-[:CONFLICTS_WITH]->(i2:Instruction)
+MATCH (i1)-[:CURRENT]->(v1:InstructionVersion)
+MATCH (i2)-[:CURRENT]->(v2:InstructionVersion)
+RETURN v1.instruction_id, v1.creditor_account, v1.currency, v2.instruction_id
+LIMIT 50;
 ```
 
-See `neo4j-graph-model/relationships.cypher` for the full property catalog.
+See `neo4j-graph-model/` for the full property catalog and schema.
 
 ---
 
