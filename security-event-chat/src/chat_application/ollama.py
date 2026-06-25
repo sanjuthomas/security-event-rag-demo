@@ -257,7 +257,7 @@ Example — active STANDING instructions for LOB FICC:
 MATCH (i:Instruction)-[:CURRENT]->(v:InstructionVersion {status: 'STANDING', owning_lob: 'FICC'})
 OPTIONAL MATCH (creatorUser:User {user_id: v.creator_user_id})
 OPTIONAL MATCH (approverUser:User {user_id: v.approver_user_id})
-RETURN v.instruction_id, v.status, v.currency, v.wire_scope,
+RETURN v.instruction_id, v.owning_lob, v.status, v.currency, v.wire_scope,
        v.creditor_name, v.creditor_account, v.end_date, v.is_expired,
        coalesce(creatorUser.display_name, v.creator_user_id, '') AS creator_display,
        coalesce(approverUser.display_name, v.approver_user_id, '') AS approver_display
@@ -293,6 +293,19 @@ RETURN supervisor.display_name AS supervisor, subordinate.display_name AS subord
        v.instruction_id, v.status, v.owning_lob
 LIMIT 50
 
+Example — print details of a specific instruction by id:
+MATCH (i:Instruction {instruction_id: '2846a7c0-4734-4626-bb58-13a966f935a1'})-[:CURRENT]->(v:InstructionVersion)
+OPTIONAL MATCH (creatorUser:User {user_id: v.creator_user_id})
+OPTIONAL MATCH (approverUser:User {user_id: v.approver_user_id})
+RETURN v.instruction_id, v.owning_lob, v.status, v.instruction_type,
+       v.currency, v.wire_scope,
+       v.creditor_name, v.creditor_account, v.creditor_bic,
+       v.debtor_name, v.debtor_account,
+       v.effective_date, v.end_date, v.is_expired,
+       coalesce(creatorUser.display_name, v.creator_user_id, '') AS creator_display,
+       coalesce(approverUser.display_name, v.approver_user_id, '') AS approver_display
+LIMIT 1
+
 Example — how many STANDING instructions for LOB FX:
 MATCH (i:Instruction)-[:CURRENT]->(v:InstructionVersion {status: 'STANDING', owning_lob: 'FX'})
 RETURN count(i) AS total, collect(v.instruction_id)[..20] AS instruction_ids
@@ -321,7 +334,7 @@ standing settlement instructions (SSI) at a large bank.
 Answer the user's question using ONLY the provided context (instruction state graph results and retrieved points).
 - Be concise and factual.
 - When listing instructions, enumerate each one clearly with:
-  instruction_id, status, currency, creditor, creator, approver, effective/end dates.
+  instruction_id, owning_lob, status, currency, wire_scope, creditor, creator, approver, effective/end dates.
 - Use the display_name "FamilyName, GivenName (user_id)" format for all users when available.
 - For CONFLICTS_WITH results (duplicate routes), explain both instructions share the same creditor account
   and currency — potential duplicate settlement risk.
