@@ -5,6 +5,16 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 
+def _display_name(user: dict[str, Any]) -> str:
+    """Return 'Family, Given (user_id)' when names are known, else just user_id."""
+    fn = user.get("family_name")
+    gn = user.get("given_name")
+    uid = user.get("user_id") or ""
+    if fn and gn and uid:
+        return f"{fn}, {gn} ({uid})"
+    return uid
+
+
 class EnrichedSecurityEventDocument(BaseModel):
     """Security event merged with the current instruction from ILM API."""
 
@@ -54,6 +64,7 @@ def build_merged_context(
         "actor_user_id": actor.get("user_id"),
         "actor_given_name": actor.get("given_name"),
         "actor_family_name": actor.get("family_name"),
+        "actor_display": _display_name(actor),
         "actor_title": actor.get("title"),
         "actor_roles": actor.get("roles") or [],
         "actor_lob": actor.get("lob"),
@@ -80,18 +91,21 @@ def build_merged_context(
         "creator_user_id": created_by.get("user_id"),
         "creator_given_name": created_by.get("given_name"),
         "creator_family_name": created_by.get("family_name"),
+        "creator_display": _display_name(created_by),
         "creator_title": created_by.get("title"),
         "creator_lob": created_by.get("lob"),
         "creator_supervisor_id": created_by.get("supervisor_id"),
         "approver_user_id": approved_by.get("user_id"),
         "approver_given_name": approved_by.get("given_name"),
         "approver_family_name": approved_by.get("family_name"),
+        "approver_display": _display_name(approved_by),
         "approver_title": approved_by.get("title"),
         "approver_lob": approved_by.get("lob"),
         "approver_supervisor_id": approved_by.get("supervisor_id"),
         "rejector_user_id": rejected_by.get("user_id"),
         "rejector_given_name": rejected_by.get("given_name"),
         "rejector_family_name": rejected_by.get("family_name"),
+        "rejector_display": _display_name(rejected_by),
         "rejector_title": rejected_by.get("title"),
         "rejector_lob": rejected_by.get("lob"),
         "rejector_supervisor_id": rejected_by.get("supervisor_id"),
