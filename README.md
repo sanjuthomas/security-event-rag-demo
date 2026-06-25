@@ -8,12 +8,12 @@ The domain is **SSI settlement route template** lifecycle management in a capita
 
 Ask the chat interface things like:
 
+- _Are there any instances of approving each other's instructions?_
 - _Who created the instruction that Michael rejected?_
 - _How many instructions were created today?_
 - _How many ALERT events today for international instructions?_
 - _Are there instructions created today still waiting for approval?_
-- _Show me the instruction associated with security event id `<uuid>`._
-- _Are there any instances of approving each other's instructions?_
+- _Can you show me the instruction associated with security event id `<uuid>`?_
 
 ---
 

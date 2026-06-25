@@ -3,7 +3,7 @@ FROM python:3.12-slim
 WORKDIR /app
 
 COPY pyproject.toml .
-COPY src ./src
+COPY security_event_qdrant_etl ./security_event_qdrant_etl
 
 RUN pip install --no-cache-dir .
 
