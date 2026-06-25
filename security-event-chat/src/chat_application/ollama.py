@@ -51,7 +51,7 @@ Example — instructions created today:
 MATCH (e:SecurityEvent {action: 'CREATE', outcome: 'success'})
 WHERE date(datetime(e.timestamp)) = date()
 OPTIONAL MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
-RETURN e.event_id, e.timestamp, e.action,
+RETURN e.event_id, e.timestamp, e.action, e.message,
        coalesce(v.instruction_id, '') AS instruction_id
 ORDER BY e.timestamp DESC
 LIMIT 50
@@ -59,14 +59,16 @@ LIMIT 50
 Example — instruction for a specific security event:
 MATCH (e:SecurityEvent {event_id: '00000000-0000-0000-0000-000000000001'})
 OPTIONAL MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
-RETURN e.event_id, e.timestamp, coalesce(v.instruction_id, '') AS instruction_id
+RETURN e.event_id, e.timestamp, e.message,
+       coalesce(v.instruction_id, '') AS instruction_id
 LIMIT 1
 
 Example — who created instructions rejected by a user:
 MATCH (u:User {user_id: 'ficc-201'})-[:ACTED_AS]->(e:SecurityEvent {action: 'REJECT'})
 MATCH (e)-[:TARGETS_VERSION]->(v:InstructionVersion)
 OPTIONAL MATCH (creator:User)-[:CREATED]->(v)
-RETURN e.event_id, e.timestamp, creator.user_id AS creator_user_id, v.instruction_id AS instruction_id
+RETURN e.event_id, e.timestamp, e.message, creator.user_id AS creator_user_id,
+       v.instruction_id AS instruction_id
 ORDER BY e.timestamp DESC
 LIMIT 20
 """
@@ -77,8 +79,9 @@ lifecycle events.
 Answer the user's question using ONLY the provided context (retrieved events and graph query results).
 - Be concise and factual.
 - When the answer involves a list of events (e.g. "how many ALERT events"), always enumerate each one
-  with its event_id, instruction_id, and timestamp. Derive the count from the number of rows listed.
-- Format event details as: event_id=<id> instruction_id=<id> time=<timestamp> action=<action>
+  with its message, event_id, instruction_id, and timestamp. Derive the count from the number of rows.
+- Format each event as: "<message>" (event_id=<id> instruction_id=<id> time=<timestamp>)
+  Example: "Policy denied VIEW on instruction 18016bb9-... by fx-201" (event_id=abc... instruction_id=18016bb9-... time=2026-06-24T10:32:00)
 - Cite event ids or instruction ids when relevant.
 - When graph results or retrieved events include instruction_id for a named event_id, use that linkage.
 - If context is insufficient, say what is missing.
