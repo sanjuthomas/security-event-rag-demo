@@ -138,13 +138,19 @@ class RagService:
         return (exact_ranked + remainder)[: settings.max_context_hits]
 
     async def _search_graph(self, question: str) -> dict[str, Any]:
+        cypher: str | None = None
         try:
             cypher = await self.ollama.generate_cypher(question, self._schema)
             rows = await self.neo4j.run_cypher(cypher)
             return {"cypher": cypher, "rows": rows}
+        except ValueError as exc:
+            # Cypher failed application-side read-only validation — log the
+            # rejected query so we can inspect what the LLM generated.
+            logger.warning("Cypher validation rejected LLM query — %s | query=%r", exc, cypher)
+            return {"cypher": cypher, "rows": [], "error": str(exc), "validation_error": True}
         except Exception as exc:
             logger.warning("graph search failed: %s", exc)
-            return {"cypher": None, "rows": [], "error": str(exc)}
+            return {"cypher": cypher, "rows": [], "error": str(exc)}
 
     @staticmethod
     def _build_context(

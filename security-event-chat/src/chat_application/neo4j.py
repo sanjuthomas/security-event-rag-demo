@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from neo4j import AsyncDriver, AsyncGraphDatabase
+from neo4j import READ_ACCESS, AsyncDriver, AsyncGraphDatabase
 
 from chat_application.config import settings
 from chat_application.cypher import (
@@ -48,8 +48,12 @@ class Neo4jClient:
         if self._driver is None:
             raise RuntimeError("Neo4j client not connected")
 
+        # Layers 1-7: application-side validation (fast-fail before network round-trip)
         validate_read_only_cypher(cypher)
-        async with self._driver.session() as session:
+
+        # Layer 8: server-side enforcement — Neo4j rejects any write operation
+        # attempted inside a READ_ACCESS session regardless of what passed above.
+        async with self._driver.session(default_access_mode=READ_ACCESS) as session:
             result = await session.run(cypher)
             records = [record async for record in result]
         return records_to_rows(records)
