@@ -3,6 +3,7 @@ from uuid import uuid4
 
 from ilm.config import settings
 from ilm.database import mongo_transaction
+from ilm.kafka_publisher import kafka_publisher
 from ilm.models.api import (
     CreateInstructionRequest,
     DeleteInstructionRequest,
@@ -17,7 +18,6 @@ from ilm.models.enums import (
     InstructionType,
     LifecycleAction,
 )
-from ilm.kafka_publisher import kafka_publisher
 from ilm.models.instruction import (
     CashSettlementInstruction,
     LifecycleEvent,
