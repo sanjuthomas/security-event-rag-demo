@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from chat_application.rag import (
     RagService,
+    _append_policy_basis,
     _display_from_snap_user,
+    _format_usd_amount,
+    _humanize_authorization_text,
+    _humanize_policy_basis,
+    _humanize_policy_basis_point,
     _instruction_lifecycle_party_lines,
     _parse_authorization_basis,
 )
@@ -24,6 +29,49 @@ class TestParseAuthorizationBasis:
 
     def test_empty_values_filtered(self) -> None:
         assert _parse_authorization_basis(["ok", "", None]) == ["ok"]
+
+
+class TestUsdAmountFormatting:
+    def test_million(self) -> None:
+        assert _format_usd_amount(1_000_000) == "$1 million"
+        assert _format_usd_amount(5_000_000) == "$5 million"
+
+    def test_billion(self) -> None:
+        assert _format_usd_amount(10_000_000_000) == "$10 billion"
+
+    def test_scientific_notation_input(self) -> None:
+        assert _format_usd_amount(float("1e+06")) == "$1 million"
+        assert _format_usd_amount(float("1e+07")) == "$10 million"
+
+    def test_humanize_policy_basis_point(self) -> None:
+        raw = "amount 1e+06 within subject and absolute limits"
+        assert _humanize_policy_basis_point(raw) == (
+            "amount $1 million within subject and absolute limits"
+        )
+
+    def test_humanize_policy_basis_list(self) -> None:
+        basis = [
+            "amount 10000000.0 within subject and absolute limits",
+            "role FUNDING_APPROVER",
+        ]
+        readable = _humanize_policy_basis(basis)
+        assert readable[0] == "amount $10 million within subject and absolute limits"
+        assert readable[1] == "role FUNDING_APPROVER"
+
+    def test_humanize_authorization_text(self) -> None:
+        summary = (
+            "User was allowed because amount 1e+06 within subject and absolute limits; "
+            "role FUNDING_APPROVER"
+        )
+        assert "amount $1 million within subject and absolute limits" in _humanize_authorization_text(
+            summary
+        )
+
+    def test_append_policy_basis_formats_amounts(self) -> None:
+        why = "Approved under policy."
+        basis = ["amount 1e+06 within subject and absolute limits"]
+        result = _append_policy_basis(why, basis)
+        assert "amount $1 million within subject and absolute limits" in result
 
 
 class TestDisplayFromSnapUser:

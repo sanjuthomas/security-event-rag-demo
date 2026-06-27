@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
 from typing import Any
 
@@ -29,6 +30,63 @@ from chat_application.reranker import RankedHit, graph_rows_to_hits, rrf_merge
 
 logger = logging.getLogger(__name__)
 
+_AMOUNT_IN_BASIS = re.compile(
+    r"amount\s+([\d.eE+-]+)\s+(within subject and absolute limits)",
+    re.IGNORECASE,
+)
+
+
+def _format_usd_amount(amount: float) -> str:
+    """Format a USD amount for compliance-facing policy text."""
+    abs_amount = abs(amount)
+    if abs_amount >= 1_000_000_000:
+        value = abs_amount / 1_000_000_000
+        if value.is_integer():
+            return f"${int(value):,} billion"
+        trimmed = f"{value:.1f}".rstrip("0").rstrip(".")
+        return f"${trimmed} billion"
+    if abs_amount >= 1_000_000:
+        value = abs_amount / 1_000_000
+        if value.is_integer():
+            return f"${int(value):,} million"
+        trimmed = f"{value:.1f}".rstrip("0").rstrip(".")
+        return f"${trimmed} million"
+    if abs_amount >= 1_000:
+        return f"${abs_amount:,.0f}"
+    if abs_amount.is_integer():
+        return f"${int(abs_amount)}"
+    return f"${abs_amount:,.2f}"
+
+
+def _humanize_policy_basis_point(point: str) -> str:
+    def _replace(match: re.Match[str]) -> str:
+        try:
+            amount = float(match.group(1))
+        except ValueError:
+            return match.group(0)
+        return f"amount {_format_usd_amount(amount)} {match.group(2)}"
+
+    return _AMOUNT_IN_BASIS.sub(_replace, point)
+
+
+def _humanize_policy_basis(basis: list[str]) -> list[str]:
+    return [_humanize_policy_basis_point(point) for point in basis]
+
+
+def _format_basis_join(basis: list[str] | None) -> str:
+    if not basis:
+        return ""
+    return " | ".join(_humanize_policy_basis(basis))
+
+
+def _humanize_authorization_text(text: str) -> str:
+    if not text:
+        return text
+    return _AMOUNT_IN_BASIS.sub(
+        lambda match: _humanize_policy_basis_point(match.group(0)),
+        text,
+    )
+
 
 def _parse_authorization_basis(value: Any) -> list[str]:
     if isinstance(value, list):
@@ -46,7 +104,7 @@ def _parse_authorization_basis(value: Any) -> list[str]:
 def _append_policy_basis(why: str, basis: list[str]) -> str:
     if not basis:
         return why
-    bullets = "\n".join(f"  • {point}" for point in basis)
+    bullets = "\n".join(f"  • {point}" for point in _humanize_policy_basis(basis))
     return f"{why.rstrip()}\n\nPolicy basis:\n{bullets}"
 
 
@@ -533,8 +591,8 @@ class RagService:
 
         why = await self.ollama.summarize_authorization_why(
             approver=approver,
-            authorization_summary=summary,
-            authorization_basis=basis or None,
+            authorization_summary=_humanize_authorization_text(summary),
+            authorization_basis=_humanize_policy_basis(basis) if basis else None,
         )
         why = _append_policy_basis(why, basis)
 
@@ -609,10 +667,11 @@ class RagService:
             return None
 
         summary = summary or f"{approver} was allowed to APPROVE_PAYMENT"
+        readable_basis = _humanize_policy_basis(basis) if basis else None
         why = await self.ollama.summarize_authorization_why(
             approver=approver,
-            authorization_summary=summary,
-            authorization_basis=basis or None,
+            authorization_summary=_humanize_authorization_text(summary),
+            authorization_basis=readable_basis,
         )
         why = _append_policy_basis(why, basis)
 
@@ -728,7 +787,7 @@ class RagService:
                         f"  creator={payload.get('creator_display')}\n"
                         f"  {party_lines}\n"
                         f"  why={payload.get('authorization_summary') or ''}\n"
-                        f"  basis={' | '.join(payload.get('authorization_basis') or [])}\n"
+                        f"  basis={_format_basis_join(payload.get('authorization_basis'))}\n"
                         f"  effective={snap.get('effective_date')} end={snap.get('end_date')} "
                         f"expired={snap.get('is_expired', False)}"
                     )
@@ -758,7 +817,7 @@ class RagService:
                         f"currency={payload.get('currency', psnap.get('currency'))} "
                         f"lob={payload.get('owning_lob', psnap.get('owning_lob'))}\n"
                         f"  why={payload.get('authorization_summary') or payload.get('reason') or payload.get('message', hit.summary)}\n"
-                        f"  basis={' | '.join(payload.get('authorization_basis') or [])}"
+                        f"  basis={_format_basis_join(payload.get('authorization_basis'))}"
                     )
                 elif src in ("instruction_security_event", "security_event", "exact_approve_event"):
                     merged = hit.merged or {}
@@ -787,7 +846,7 @@ class RagService:
                         f"  creator={merged.get('creator_display', merged.get('creator_user_id'))}\n"
                         f"  {party_lines}\n"
                         f"  why={merged.get('authorization_summary') or merged.get('event_reason') or merged.get('reason') or hit.summary}\n"
-                        f"  basis={' | '.join(merged.get('authorization_basis') or [])}"
+                        f"  basis={_format_basis_join(merged.get('authorization_basis'))}"
                     )
                 else:
                     merged = hit.merged or {}

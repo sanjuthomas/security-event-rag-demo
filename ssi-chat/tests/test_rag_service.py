@@ -127,7 +127,7 @@ class TestRagServiceAsk:
                             "role FUNDING_APPROVER",
                             "group MIDDLE_OFFICE",
                             "covers LOB FICC",
-                            "amount 10000000.0 within subject and absolute limits",
+                            "amount 1e+06 within subject and absolute limits",
                             "not self-approval (creator is not approver)",
                             "approver does not report to payment creator",
                         ],
@@ -135,17 +135,7 @@ class TestRagServiceAsk:
                 }
             ]
         )
-        mock_neo4j.run_cypher = AsyncMock(
-            return_value=[
-                {
-                    "payment_id": pid,
-                    "approver_display": "Laurent, Sophie (pay-201)",
-                    "approved_at": "2026-06-27T21:39:26.072387Z",
-                    "authorization_summary": "OPA allowed",
-                    "authorization_basis": '["role FUNDING_APPROVER"]',
-                }
-            ]
-        )
+        mock_neo4j.run_cypher = AsyncMock(return_value=[])
         mock_ollama.summarize_authorization_why = AsyncMock(
             return_value="Sophie Laurent was authorized as a funding approver covering FICC."
         )
@@ -159,6 +149,8 @@ class TestRagServiceAsk:
         assert "Policy basis:" in response.answer
         assert "role FUNDING_APPROVER" in response.answer
         assert "covers LOB FICC" in response.answer
+        assert "amount $1 million within subject and absolute limits" in response.answer
+        assert "1e+06" not in response.answer
         mock_ollama.synthesize_answer.assert_not_called()
 
     @pytest.mark.asyncio
