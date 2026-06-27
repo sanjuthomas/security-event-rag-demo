@@ -764,7 +764,3 @@ Each service reads configuration from environment variables (see its own README 
 Each application directory has its own README.
 
 ---
-
-## Demo
-
-![Screen capture](docs/screen-capture.gif)
