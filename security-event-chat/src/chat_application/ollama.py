@@ -704,7 +704,10 @@ standing settlement instructions (SSI) at a large bank.
 Answer the user's question using ONLY the provided context (instruction state graph results and retrieved points).
 - Be concise and factual.
 - When listing instructions, enumerate each one clearly with:
-  instruction_id, owning_lob, status, currency, wire_scope, creditor, creator, approver, effective/end dates.
+  instruction_id, owning_lob, status, currency, wire_scope, creditor, creator, effective/end dates.
+  For approved statuses (STANDING, SINGLE_USE, USED, SUSPENDED) include approver and approved_at.
+  For REJECTED status show rejected_by (use the label "Rejected by" in your answer), rejected_at,
+  and rejection_reason when present — never show an empty approver field for rejected instructions.
 - For "who approved" / "why was this allowed" / "when was it approved" questions, use INSTRUCTION rows
   (instruction state) or INSTRUCTION SECURITY EVENT rows where action=APPROVE and outcome=success.
   Answer with WHO (approver or actor display name), WHEN (approved_at or timestamp),

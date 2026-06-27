@@ -36,6 +36,41 @@ def _parse_authorization_basis(value: Any) -> list[str]:
     return []
 
 
+def _display_from_snap_user(snap: dict[str, Any], field: str) -> str:
+    user = snap.get(field) or {}
+    family_name = user.get("family_name")
+    given_name = user.get("given_name")
+    user_id = user.get("user_id") or ""
+    if family_name and given_name:
+        return f"{family_name}, {given_name} ({user_id})"
+    return user_id
+
+
+def _instruction_lifecycle_party_lines(payload: dict[str, Any], snap: dict[str, Any]) -> str:
+    status = (snap.get("status") or payload.get("status") or "").upper()
+    lines: list[str] = []
+
+    if status == "REJECTED":
+        rejected_by = payload.get("rejector_display") or _display_from_snap_user(snap, "rejected_by")
+        if rejected_by:
+            lines.append(f"rejected_by={rejected_by}")
+        rejected_at = payload.get("rejected_at") or snap.get("rejected_at")
+        if rejected_at:
+            lines.append(f"rejected_at={rejected_at}")
+        reason = payload.get("rejection_reason") or snap.get("rejection_reason")
+        if reason:
+            lines.append(f"rejection_reason={reason}")
+    elif status in ("STANDING", "SINGLE_USE", "USED", "SUSPENDED"):
+        approver = payload.get("approver_display") or _display_from_snap_user(snap, "approved_by")
+        if approver:
+            lines.append(f"approver={approver}")
+        approved_at = payload.get("approved_at") or snap.get("approved_at")
+        if approved_at:
+            lines.append(f"approved_at={approved_at}")
+
+    return "\n  ".join(lines)
+
+
 class RagService:
     def __init__(
         self,
@@ -426,6 +461,7 @@ class RagService:
                     src = payload.get("source")
 
                 if src == "instruction_state" or src == "exact_instruction":
+                    party_lines = _instruction_lifecycle_party_lines(payload, snap)
                     lines.append(
                         f"[{index}] INSTRUCTION instruction_id={hit.instruction_id} "
                         f"score={hit.score:.4f}\n"
@@ -434,9 +470,8 @@ class RagService:
                         f"scope={snap.get('wire_scope')}\n"
                         f"  creditor={snap.get('creditor_name')} "
                         f"creditor_acct={snap.get('creditor_account_id')}\n"
-                        f"  creator={payload.get('creator_display')} "
-                        f"approver={payload.get('approver_display')}\n"
-                        f"  approved_at={payload.get('approved_at') or snap.get('approved_at')}\n"
+                        f"  creator={payload.get('creator_display')}\n"
+                        f"  {party_lines}\n"
                         f"  why={payload.get('authorization_summary') or ''}\n"
                         f"  basis={' | '.join(payload.get('authorization_basis') or [])}\n"
                         f"  effective={snap.get('effective_date')} end={snap.get('end_date')} "
@@ -472,6 +507,20 @@ class RagService:
                     )
                 elif src in ("instruction_security_event", "security_event", "exact_approve_event"):
                     merged = hit.merged or {}
+                    event_snap = merged.get("instruction_snapshot") or {}
+                    status = (merged.get("status") or event_snap.get("status") or "").upper()
+                    action = (merged.get("action") or "").upper()
+                    if status == "REJECTED" or action == "REJECT":
+                        party_lines = (
+                            f"rejected_by={merged.get('rejector_display') or merged.get('actor_display', merged.get('actor_user_id'))}\n"
+                            f"  rejected_at={merged.get('rejected_at') or event_snap.get('rejected_at') or merged.get('timestamp')}\n"
+                            f"  rejection_reason={merged.get('rejection_reason') or event_snap.get('rejection_reason') or ''}"
+                        )
+                    else:
+                        party_lines = (
+                            f"approver={merged.get('approver_display', merged.get('approver_user_id'))}\n"
+                            f"  approved_at={merged.get('approved_at') or event_snap.get('approved_at') or ''}"
+                        )
                     lines.append(
                         f"[{index}] INSTRUCTION SECURITY EVENT event_id={hit.event_id} "
                         f"instruction_id={hit.instruction_id} "
@@ -480,8 +529,8 @@ class RagService:
                         f"severity={merged.get('severity')} outcome={merged.get('outcome')} "
                         f"actor={merged.get('actor_display', merged.get('actor_user_id'))} "
                         f"lob={merged.get('owning_lob')}\n"
-                        f"  creator={merged.get('creator_display', merged.get('creator_user_id'))} "
-                        f"approver={merged.get('approver_display', merged.get('approver_user_id'))}\n"
+                        f"  creator={merged.get('creator_display', merged.get('creator_user_id'))}\n"
+                        f"  {party_lines}\n"
                         f"  why={merged.get('authorization_summary') or merged.get('event_reason') or merged.get('reason') or hit.summary}\n"
                         f"  basis={' | '.join(merged.get('authorization_basis') or [])}"
                     )

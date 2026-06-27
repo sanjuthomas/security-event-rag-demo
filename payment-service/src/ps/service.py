@@ -13,7 +13,7 @@ from ps.authorization import (
 from ps.ilm_client import IlmClient, InstructionNotFoundError, InstructionStateError
 from ps.kafka_publisher import kafka_publisher
 from ps.models.api import LifecycleEvent, RejectPaymentRequest, Subject, UserReference
-from ps.models.enums import PaymentAction, PaymentStatus, SecurityEventSeverity
+from ps.models.enums import PaymentAction, PaymentStatus
 from ps.models.payment import Payment
 from ps.models.security_event import PaymentSecurityEvent
 from ps.opa import OpaClient
@@ -166,11 +166,6 @@ class PaymentService:
                 payment,
                 reason=authorization["summary"],
                 details=details_with_authorization(None, authorization),
-                severity=(
-                    SecurityEventSeverity.ALERT
-                    if decision.is_alert
-                    else SecurityEventSeverity.MEDIUM
-                ),
             )
             raise PermissionError(authorization["summary"])
         return authorization

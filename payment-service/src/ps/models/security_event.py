@@ -143,12 +143,7 @@ class PaymentSecurityEvent(BaseModel):
         event_details = dict(details or {})
         event_details["policy_engine"] = "opa"
         return cls(
-            severity=severity
-            or (
-                SecurityEventSeverity.ALERT
-                if (event_details.get("authorization") or {}).get("is_alert")
-                else SecurityEventSeverity.MEDIUM
-            ),
+            severity=severity or SecurityEventSeverity.ALERT,
             message=f"Policy denied {action.value} on payment {payment.payment_id} by {subject.user_id}",
             event=SecurityEventContext(
                 type=["access", "denied"],

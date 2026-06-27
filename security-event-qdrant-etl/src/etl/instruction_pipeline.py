@@ -124,6 +124,10 @@ class InstructionPipeline:
             "creator_display": _display_name(snap.get("created_by") or {}),
             "approver_user_id": (snap.get("approved_by") or {}).get("user_id"),
             "approver_display": _display_name(snap.get("approved_by") or {}),
+            "rejector_user_id": (snap.get("rejected_by") or {}).get("user_id"),
+            "rejector_display": _display_name(snap.get("rejected_by") or {}),
+            "rejected_at": auth_merged.get("rejected_at") or snap.get("rejected_at"),
+            "rejection_reason": auth_merged.get("rejection_reason") or snap.get("rejection_reason"),
             "authorization_summary": auth_merged.get("authorization_summary"),
             "authorization_basis": auth_merged.get("authorization_basis") or [],
             "actor_user_id": fact.get("actor_user_id"),
@@ -132,14 +136,25 @@ class InstructionPipeline:
             "instruction_snapshot": snap,
         }
 
-        if fact.get("action") != "APPROVE":
-            existing = self.qdrant_store.get_instruction_state_payload(instruction_id)
-            if existing:
+        existing = self.qdrant_store.get_instruction_state_payload(instruction_id)
+        if existing:
+            if fact.get("action") != "APPROVE":
                 if not payload.get("authorization_summary"):
                     payload["authorization_summary"] = existing.get("authorization_summary")
                     payload["authorization_basis"] = existing.get("authorization_basis") or []
                 if not payload.get("approved_at"):
                     payload["approved_at"] = existing.get("approved_at")
+                if not payload.get("approver_display"):
+                    payload["approver_display"] = existing.get("approver_display")
+                    payload["approver_user_id"] = existing.get("approver_user_id")
+            if fact.get("action") != "REJECT":
+                if not payload.get("rejector_display"):
+                    payload["rejector_display"] = existing.get("rejector_display")
+                    payload["rejector_user_id"] = existing.get("rejector_user_id")
+                if not payload.get("rejected_at"):
+                    payload["rejected_at"] = existing.get("rejected_at")
+                if not payload.get("rejection_reason"):
+                    payload["rejection_reason"] = existing.get("rejection_reason")
 
         self.qdrant_store.upsert_instruction_state(
             instruction_id=instruction_id,
