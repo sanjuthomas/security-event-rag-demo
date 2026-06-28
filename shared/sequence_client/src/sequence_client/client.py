@@ -65,3 +65,30 @@ class SequenceClient:
             owning_lob=owning_lob,
             entity_type="PAYMENT",
         )
+
+    async def next_security_event_id(self, *, resource_id: str) -> str:
+        url = f"{self._base}/api/v1/sequences/security-events/next"
+        payload = {"resource_id": resource_id}
+
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                response = await client.post(url, json=payload)
+        except httpx.HTTPError as exc:
+            raise SequenceServiceUnavailable(
+                f"sequence-service unreachable at {self._base}"
+            ) from exc
+
+        if response.status_code >= 500:
+            raise SequenceServiceUnavailable(
+                f"sequence-service error ({response.status_code}): {response.text}"
+            )
+        if response.status_code >= 400:
+            raise SequenceClientError(
+                f"sequence-service rejected request ({response.status_code}): {response.text}"
+            )
+
+        body = response.json()
+        sequence_id = body.get("sequence_id")
+        if not sequence_id:
+            raise SequenceClientError("sequence-service response missing sequence_id")
+        return str(sequence_id)

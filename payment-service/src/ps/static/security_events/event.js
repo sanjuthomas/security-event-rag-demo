@@ -106,14 +106,22 @@ async function loadEvent() {
   subtitle.textContent = eventId;
   document.title = `Payment Security Event · ${eventId}`;
 
+  if (!AdminAuth.loadSession()) {
+    showError("Admin sign-in required.");
+    return;
+  }
+
   try {
-    const response = await fetch(`${API_BASE}/${encodeURIComponent(eventId)}`);
+    const response = await AdminAuth.adminFetch(
+      `${API_BASE}/${encodeURIComponent(eventId)}`
+    );
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}));
       throw new Error(payload.detail || `HTTP ${response.status}`);
     }
     const payload = await response.json();
     const event = payload.event;
+    errorEl.classList.add("hidden");
     renderSummary(event);
     summaryEl.classList.remove("hidden");
     jsonEl.textContent = JSON.stringify(event, null, 2);
@@ -135,4 +143,13 @@ copyBtn.addEventListener("click", async () => {
   }
 });
 
-loadEvent();
+AdminAuth.bindAdminAuthPanel({
+  statusEl: document.getElementById("auth-status"),
+  userEl: document.getElementById("auth-user"),
+  passwordEl: document.getElementById("auth-password"),
+  loginBtn: document.getElementById("auth-login-btn"),
+  logoutBtn: document.getElementById("auth-logout-btn"),
+  onAuthenticated: () => {
+    void loadEvent();
+  },
+});

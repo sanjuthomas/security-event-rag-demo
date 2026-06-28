@@ -103,6 +103,7 @@ def test_payment_security_event_authorized_action(subject: Subject, payment: Pay
         PaymentAction.CREATE_PAYMENT,
         subject,
         payment,
+        event_id="20260628-FICC-P-1-SE-1",
         details={"authorization": {"summary": "allowed"}},
     )
     assert event.severity == SecurityEventSeverity.INFO
@@ -122,6 +123,7 @@ def test_payment_security_event_authorized_change_action(
         PaymentAction.SUBMIT_PAYMENT,
         subject,
         payment,
+        event_id="20260628-FICC-P-1-SE-1",
     )
     assert event.event.type == ["change"]
 
@@ -131,6 +133,7 @@ def test_payment_security_event_policy_denial(subject: Subject, payment: Payment
         PaymentAction.APPROVE_PAYMENT,
         subject,
         payment,
+        event_id="20260628-FICC-P-1-SE-2",
         reason="denied",
     )
     assert event.severity == SecurityEventSeverity.ALERT

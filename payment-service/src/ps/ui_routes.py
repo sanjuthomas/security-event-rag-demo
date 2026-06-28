@@ -7,6 +7,7 @@ from ps.admin import get_admin_subject
 from ps.repository import PaymentNotFoundError, PaymentRepository
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+_UI_NO_CACHE_HEADERS = {"Cache-Control": "no-cache"}
 
 router = APIRouter(tags=["ui"])
 
@@ -14,12 +15,12 @@ router = APIRouter(tags=["ui"])
 @router.get("/ui")
 @router.get("/ui/")
 async def ui_index() -> FileResponse:
-    return FileResponse(STATIC_DIR / "index.html")
+    return FileResponse(STATIC_DIR / "index.html", headers=_UI_NO_CACHE_HEADERS)
 
 
 @router.get("/ui/payments/{payment_id}")
 async def ui_payment_detail(payment_id: str) -> FileResponse:
-    return FileResponse(STATIC_DIR / "payment.html")
+    return FileResponse(STATIC_DIR / "payment.html", headers=_UI_NO_CACHE_HEADERS)
 
 
 @router.get("/api/ui/payments")

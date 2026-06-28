@@ -9,6 +9,7 @@ from inst.repository import InstructionNotFoundError, InstructionRepository
 from inst.service import _to_response
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+_UI_NO_CACHE_HEADERS = {"Cache-Control": "no-cache"}
 
 router = APIRouter(tags=["ui"])
 
@@ -16,12 +17,12 @@ router = APIRouter(tags=["ui"])
 @router.get("/ui")
 @router.get("/ui/")
 async def ui_index() -> FileResponse:
-    return FileResponse(STATIC_DIR / "index.html")
+    return FileResponse(STATIC_DIR / "index.html", headers=_UI_NO_CACHE_HEADERS)
 
 
 @router.get("/ui/instructions/{instruction_id}")
 async def ui_instruction_detail(instruction_id: str) -> FileResponse:
-    return FileResponse(STATIC_DIR / "instruction.html")
+    return FileResponse(STATIC_DIR / "instruction.html", headers=_UI_NO_CACHE_HEADERS)
 
 
 @router.get("/api/ui/instructions")

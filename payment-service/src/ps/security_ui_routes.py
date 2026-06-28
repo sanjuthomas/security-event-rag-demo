@@ -8,6 +8,7 @@ from ps.config import settings
 from ps.security_event_ui_store import SecurityEventUiStore
 
 SECURITY_EVENTS_STATIC_DIR = Path(__file__).resolve().parent / "static" / "security_events"
+_UI_NO_CACHE_HEADERS = {"Cache-Control": "no-cache"}
 
 router = APIRouter(tags=["security-events-ui"])
 security_event_ui_store = SecurityEventUiStore()
@@ -16,12 +17,12 @@ security_event_ui_store = SecurityEventUiStore()
 @router.get("/ui/security-events")
 @router.get("/ui/security-events/")
 async def security_events_index() -> FileResponse:
-    return FileResponse(SECURITY_EVENTS_STATIC_DIR / "index.html")
+    return FileResponse(SECURITY_EVENTS_STATIC_DIR / "index.html", headers=_UI_NO_CACHE_HEADERS)
 
 
 @router.get("/ui/security-events/events/{event_id}")
 async def security_event_detail(event_id: str) -> FileResponse:
-    return FileResponse(SECURITY_EVENTS_STATIC_DIR / "event.html")
+    return FileResponse(SECURITY_EVENTS_STATIC_DIR / "event.html", headers=_UI_NO_CACHE_HEADERS)
 
 
 @router.get("/api/ui/security-events")

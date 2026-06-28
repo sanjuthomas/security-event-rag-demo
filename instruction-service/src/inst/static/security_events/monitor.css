@@ -64,7 +64,7 @@ select, .btn { border: 1px solid var(--border); background: var(--panel); color:
 .btn:hover { border-color: var(--accent); }
 .btn-ghost { background: transparent; }
 .table-wrap { margin: 0 1.5rem 1.5rem; border: 1px solid var(--border); border-radius: 1rem; overflow: auto; background: rgba(18, 26, 47, 0.88); box-shadow: var(--shadow); max-height: calc(100vh - 220px); }
-table { width: 100%; border-collapse: collapse; min-width: 1100px; }
+table { width: 100%; border-collapse: collapse; min-width: 1280px; }
 thead th { position: sticky; top: 0; z-index: 1; text-align: left; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); background: var(--panel-2); padding: 0.85rem 0.9rem; border-bottom: 1px solid var(--border); }
 tbody td { padding: 0.8rem 0.9rem; border-bottom: 1px solid rgba(42, 53, 84, 0.65); vertical-align: top; font-size: 0.92rem; }
 tbody tr { transition: background 0.35s ease; }
@@ -84,7 +84,7 @@ tbody tr.sev-ALERT { background: linear-gradient(90deg, var(--alert-bg), transpa
 .hidden { display: none; }
 .event-id-link { color: var(--accent); text-decoration: none; }
 .event-id-link:hover { text-decoration: underline; }
-.col-event-id { width: 7.5rem; min-width: 7.5rem; max-width: 7.5rem; white-space: nowrap; }
+.col-event-id { width: 32ch; min-width: 32ch; max-width: 32ch; white-space: nowrap; }
 .detail-page .detail-main { padding: 1.5rem; max-width: 1100px; margin: 0 auto; }
 .detail-error { padding: 1rem 1.25rem; border: 1px solid var(--critical); background: var(--critical-bg); border-radius: 10px; color: #fecaca; }
 .detail-card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 1.25rem 1.5rem; box-shadow: var(--shadow); margin-bottom: 1.5rem; }

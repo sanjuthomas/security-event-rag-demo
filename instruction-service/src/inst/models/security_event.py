@@ -1,6 +1,5 @@
 from datetime import datetime, timezone
 from typing import Any
-from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
@@ -57,7 +56,7 @@ class SecurityEventSource(BaseModel):
 class SecurityEvent(BaseModel):
     """Canonical security event stored in the security_events database."""
 
-    event_id: str = Field(default_factory=lambda: str(uuid4()))
+    event_id: str
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     severity: SecurityEventSeverity
     message: str
@@ -132,6 +131,7 @@ class SecurityEvent(BaseModel):
         subject: Subject,
         instruction: CashSettlementInstruction,
         *,
+        event_id: str,
         version_number: int | None = None,
         details: dict[str, Any] | None = None,
     ) -> "SecurityEvent":
@@ -143,6 +143,7 @@ class SecurityEvent(BaseModel):
         authorization = event_details.get("authorization") or {}
         reason = authorization.get("summary")
         return cls(
+            event_id=event_id,
             severity=SecurityEventSeverity.INFO,
             message=(
                 f"Authorized {action.value} on instruction "
@@ -169,6 +170,7 @@ class SecurityEvent(BaseModel):
         subject: Subject,
         instruction: CashSettlementInstruction,
         *,
+        event_id: str,
         reason: str,
         details: dict[str, Any] | None = None,
         severity: SecurityEventSeverity | None = None,
@@ -181,6 +183,7 @@ class SecurityEvent(BaseModel):
             "policy_engine": "opa",
         }
         return cls(
+            event_id=event_id,
             severity=severity or SecurityEventSeverity.ALERT,
             message=(
                 f"Policy denied {action.value} on instruction "

@@ -21,7 +21,6 @@ from ps.kafka_publisher import kafka_publisher
 from ps.models.api import LifecycleEvent, RejectPaymentRequest, Subject, UserReference
 from ps.models.enums import PaymentAction, PaymentStatus
 from ps.models.payment import Payment
-from ps.models.security_event import PaymentSecurityEvent
 from ps.repository import PaymentNotFoundError, PaymentRepository
 from ps.security_event_repository import SecurityEventRepository
 from ps.service_identity import service_identity
@@ -241,14 +240,14 @@ class PaymentService:
         subject: Subject,
         payment: Payment,
         *,
-        event_id: str,
         details: dict | None = None,
     ) -> None:
-        event = PaymentSecurityEvent.authorized_action(
-            action, subject, payment, details=details
+        await self.event_repo.record_authorized_action(
+            action,
+            subject,
+            payment,
+            details=details,
         )
-        event.event_id = event_id
-        await self.event_repo.insert(event)
         await self._publish_payment_fact(payment)
 
     async def _publish_payment_fact(self, payment: Payment) -> None:
@@ -284,7 +283,7 @@ class PaymentService:
         instruction_version = int(instruction.get("version_number") or 1)
         end_date = instruction.get("end_date") or ""
 
-        event_id = str(uuid4())
+        lifecycle_event_id = str(uuid4())
         business_date = datetime.now(timezone.utc).date()
         try:
             payment_id = await self.sequence.next_payment_id(
@@ -304,7 +303,7 @@ class PaymentService:
             owning_lob=instruction["owning_lob"],
             instruction_type=instruction_status,
             subject=subject,
-            event_id=event_id,
+            event_id=lifecycle_event_id,
         )
 
         try:
@@ -356,7 +355,6 @@ class PaymentService:
             PaymentAction.CREATE_PAYMENT,
             subject,
             payment,
-            event_id=event_id,
             details=details_with_authorization(None, authorization),
         )
 
@@ -404,13 +402,13 @@ class PaymentService:
             raise
 
         now = datetime.now(timezone.utc)
-        event_id = str(uuid4())
+        lifecycle_event_id = str(uuid4())
         payment.status = PaymentStatus.SUBMITTED
         payment.submitted_by = _user_ref(subject)
         payment.updated_at = now
         payment.lifecycle_events.append(
             LifecycleEvent(
-                event_id=event_id,
+                event_id=lifecycle_event_id,
                 action="SUBMIT_PAYMENT",
                 actor_user_id=subject.user_id,
                 timestamp=now.isoformat(),
@@ -423,7 +421,6 @@ class PaymentService:
             PaymentAction.SUBMIT_PAYMENT,
             subject,
             payment,
-            event_id=event_id,
             details=details_with_authorization(None, authorization),
         )
 
@@ -477,13 +474,13 @@ class PaymentService:
             raise
 
         now = datetime.now(timezone.utc)
-        event_id = str(uuid4())
+        lifecycle_event_id = str(uuid4())
         payment.status = PaymentStatus.APPROVED
         payment.approved_by = _user_ref(subject)
         payment.updated_at = now
         payment.lifecycle_events.append(
             LifecycleEvent(
-                event_id=event_id,
+                event_id=lifecycle_event_id,
                 action="APPROVE_PAYMENT",
                 actor_user_id=subject.user_id,
                 timestamp=now.isoformat(),
@@ -496,7 +493,6 @@ class PaymentService:
             PaymentAction.APPROVE_PAYMENT,
             subject,
             payment,
-            event_id=event_id,
             details=details_with_authorization(None, authorization),
         )
 
@@ -545,14 +541,14 @@ class PaymentService:
             raise
 
         now = datetime.now(timezone.utc)
-        event_id = str(uuid4())
+        lifecycle_event_id = str(uuid4())
         payment.status = PaymentStatus.REJECTED
         payment.rejected_by = _user_ref(subject)
         payment.rejection_reason = request.reason
         payment.updated_at = now
         payment.lifecycle_events.append(
             LifecycleEvent(
-                event_id=event_id,
+                event_id=lifecycle_event_id,
                 action="REJECT_PAYMENT",
                 actor_user_id=subject.user_id,
                 timestamp=now.isoformat(),
@@ -566,7 +562,6 @@ class PaymentService:
             PaymentAction.REJECT_PAYMENT,
             subject,
             payment,
-            event_id=event_id,
             details=details_with_authorization({"reason": request.reason}, authorization),
         )
 
@@ -623,14 +618,14 @@ class PaymentService:
     async def _cancel(self, payment: Payment, subject: Subject, reason: str) -> Payment:
         """Move a payment to CANCELLED and record a security event with the approver's identity."""
         now = datetime.now(timezone.utc)
-        event_id = str(uuid4())
+        lifecycle_event_id = str(uuid4())
         payment.status = PaymentStatus.CANCELLED
         payment.cancelled_by = _user_ref(subject)
         payment.cancellation_reason = reason
         payment.updated_at = now
         payment.lifecycle_events.append(
             LifecycleEvent(
-                event_id=event_id,
+                event_id=lifecycle_event_id,
                 action="CANCEL_PAYMENT",
                 actor_user_id=subject.user_id,
                 timestamp=now.isoformat(),
@@ -644,7 +639,6 @@ class PaymentService:
             PaymentAction.CANCEL_PAYMENT,
             subject,
             payment,
-            event_id=event_id,
             details={"reason": reason},
         )
 

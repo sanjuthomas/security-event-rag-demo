@@ -54,6 +54,7 @@ def mock_authz() -> AsyncMock:
 @pytest.fixture
 def mock_security_events() -> MagicMock:
     events = MagicMock()
+    events.allocate_event_id = AsyncMock(return_value="instr-001-SE-1")
     events.record_policy_denial = AsyncMock()
     events.record_authorized_action = AsyncMock()
     events.insert_document = AsyncMock()

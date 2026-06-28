@@ -100,11 +100,15 @@ def event_collection() -> AsyncMock:
 
 @pytest.fixture
 def event_repo(event_collection: AsyncMock):
+    sequence_client = AsyncMock()
+    sequence_client.next_security_event_id = AsyncMock(
+        return_value="20260628-FICC-P-1-SE-1"
+    )
     with patch(
         "ps.security_event_repository.get_security_events_db",
         return_value={"payment-service": event_collection},
     ):
-        yield SecurityEventRepository(), event_collection
+        yield SecurityEventRepository(sequence_client=sequence_client), event_collection
 
 
 @pytest.mark.asyncio
@@ -121,6 +125,7 @@ async def test_security_event_insert(
         details={"authorization": {"summary": "ok"}},
     )
     col.insert_one.assert_awaited_once()
+    assert event.event_id == "20260628-FICC-P-1-SE-1"
     assert event.event.action == "CREATE_PAYMENT"
 
 

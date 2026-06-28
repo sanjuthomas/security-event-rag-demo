@@ -50,7 +50,7 @@ async def test_create_standing_payment_success(
     service.ilm.get_instruction.return_value = standing_instruction
     service.authz.evaluate_payment.return_value = _allow_decision()
     service.repo.insert.return_value = None
-    service.event_repo.insert.return_value = None
+    service.event_repo.record_authorized_action = AsyncMock()
 
     with patch("ps.service.kafka_publisher.publish_payment", new_callable=AsyncMock):
         payment = await service.create(
@@ -63,7 +63,7 @@ async def test_create_standing_payment_success(
     assert payment.status == PaymentStatus.DRAFT
     assert payment.amount == 500_000.0
     service.repo.insert.assert_awaited_once()
-    service.event_repo.insert.assert_awaited_once()
+    service.event_repo.record_authorized_action.assert_awaited_once()
     service.ilm.mark_used.assert_not_awaited()
 
 

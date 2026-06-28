@@ -19,3 +19,11 @@ def build_counter_key(business_date: date, owning_lob: str, entity_type: EntityT
 
 def build_sequence_id(counter_key: str, sequence_number: int) -> str:
     return f"{counter_key}-{sequence_number}"
+
+
+def build_security_event_counter_key(resource_id: str) -> str:
+    return f"{resource_id}-SE"
+
+
+def build_security_event_sequence_id(resource_id: str, sequence_number: int) -> str:
+    return f"{build_security_event_counter_key(resource_id)}-{sequence_number}"

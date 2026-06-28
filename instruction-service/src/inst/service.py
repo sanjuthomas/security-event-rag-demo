@@ -290,10 +290,14 @@ class InstructionService:
                 saved = await self.repository.append_version(instruction, session=session)
 
             if self._should_record_security_event(subject):
+                event_id = await self.security_events.allocate_event_id(
+                    saved.instruction.instruction_id
+                )
                 event = SecurityEvent.authorized_action(
                     action,
                     subject,
                     saved.instruction,
+                    event_id=event_id,
                     version_number=saved.version_number,
                     details=details,
                 )

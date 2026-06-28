@@ -1,6 +1,9 @@
 import logging
 from typing import Any
 
+from sequence_client import SequenceClient
+from sequence_client.errors import SequenceClientError
+
 from ps.config import settings
 from ps.database import get_security_events_db
 from ps.kafka_publisher import kafka_publisher
@@ -15,9 +18,18 @@ logger = logging.getLogger(__name__)
 class SecurityEventRepository:
     """Write-only persistence for payment SIEM events (MongoDB + Kafka)."""
 
+    def __init__(self, sequence_client: SequenceClient | None = None) -> None:
+        self.sequence = sequence_client or SequenceClient(settings.sequence_service_url)
+
     @property
     def _col(self):
         return get_security_events_db()[settings.security_events_collection]
+
+    async def allocate_event_id(self, resource_id: str) -> str:
+        try:
+            return await self.sequence.next_security_event_id(resource_id=resource_id)
+        except SequenceClientError as exc:
+            raise RuntimeError(f"security event sequence allocation failed: {exc}") from exc
 
     async def insert_document(self, document: dict[str, Any]) -> dict[str, Any]:
         await self._col.insert_one(document)
@@ -43,10 +55,12 @@ class SecurityEventRepository:
         *,
         details: dict[str, Any] | None = None,
     ) -> PaymentSecurityEvent:
+        event_id = await self.allocate_event_id(payment.payment_id)
         event = PaymentSecurityEvent.authorized_action(
             action,
             subject,
             payment,
+            event_id=event_id,
             details=details,
         )
         return await self.insert(event)
@@ -61,10 +75,12 @@ class SecurityEventRepository:
         details: dict[str, Any] | None = None,
         severity: SecurityEventSeverity | None = None,
     ) -> PaymentSecurityEvent:
+        event_id = await self.allocate_event_id(payment.payment_id)
         event = PaymentSecurityEvent.policy_denial(
             action,
             subject,
             payment,
+            event_id=event_id,
             reason=reason,
             details=details,
             severity=severity,

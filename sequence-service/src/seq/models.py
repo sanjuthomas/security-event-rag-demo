@@ -36,3 +36,25 @@ class NextSequenceResponse(BaseModel):
     entity_type: EntityType
     sequence_number: int
     counter_key: str
+
+
+class NextSecurityEventSequenceRequest(BaseModel):
+    resource_id: str = Field(
+        min_length=1,
+        description="Parent resource id, e.g. instruction or payment sequence id",
+    )
+
+    @field_validator("resource_id")
+    @classmethod
+    def validate_resource_id(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("resource_id must not be blank")
+        return normalized
+
+
+class NextSecurityEventSequenceResponse(BaseModel):
+    sequence_id: str
+    resource_id: str
+    sequence_number: int
+    counter_key: str

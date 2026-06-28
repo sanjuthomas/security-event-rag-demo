@@ -1,8 +1,5 @@
-from __future__ import annotations
-
 from datetime import datetime, timezone
 from typing import Any
-from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
@@ -51,7 +48,7 @@ class SecurityEventSource(BaseModel):
 
 
 class PaymentSecurityEvent(BaseModel):
-    event_id: str = Field(default_factory=lambda: str(uuid4()))
+    event_id: str
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     severity: SecurityEventSeverity
     message: str
@@ -108,12 +105,14 @@ class PaymentSecurityEvent(BaseModel):
         subject: Subject,
         payment: Payment,
         *,
+        event_id: str,
         details: dict[str, Any] | None = None,
     ) -> "PaymentSecurityEvent":
         event_details = dict(details or {})
         authorization = event_details.get("authorization") or {}
         reason = authorization.get("summary")
         return cls(
+            event_id=event_id,
             severity=SecurityEventSeverity.INFO,
             message=f"Authorized {action.value} on payment {payment.payment_id} by {subject.user_id}",
             event=SecurityEventContext(
@@ -136,6 +135,7 @@ class PaymentSecurityEvent(BaseModel):
         subject: Subject,
         payment: Payment,
         *,
+        event_id: str,
         reason: str,
         details: dict[str, Any] | None = None,
         severity: SecurityEventSeverity | None = None,
@@ -143,6 +143,7 @@ class PaymentSecurityEvent(BaseModel):
         event_details = dict(details or {})
         event_details["policy_engine"] = "opa"
         return cls(
+            event_id=event_id,
             severity=severity or SecurityEventSeverity.ALERT,
             message=f"Policy denied {action.value} on payment {payment.payment_id} by {subject.user_id}",
             event=SecurityEventContext(

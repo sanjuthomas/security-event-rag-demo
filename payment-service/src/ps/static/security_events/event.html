@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Payment Security Event</title>
-    <link rel="stylesheet" href="/ui/security-events/static/monitor.css" />
-    <link rel="stylesheet" href="/ui/security-events/static/security-events.css" />
+    <link rel="stylesheet" href="/ui/security-events/static/monitor.css?v=2" />
+    <link rel="stylesheet" href="/ui/security-events/static/security-events.css?v=2" />
   </head>
   <body class="detail-page">
     <header class="topbar">
@@ -21,6 +21,13 @@
           <a href="/ui/">Payments</a>
           <a href="/ui/security-events/" class="active">Security events</a>
         </nav>
+        <div class="admin-auth">
+          <span id="auth-status" class="muted">Admin sign-in required</span>
+          <input id="auth-user" type="text" value="admin-001" aria-label="Admin user" />
+          <input id="auth-password" type="password" placeholder="Password" aria-label="Password" />
+          <button type="button" id="auth-login-btn" class="btn-secondary">Sign in</button>
+          <button type="button" id="auth-logout-btn" class="btn-ghost hidden">Sign out</button>
+        </div>
         <a class="btn btn-ghost" href="/ui/security-events/">Back to monitor</a>
       </div>
     </header>
@@ -37,6 +44,7 @@
       </section>
     </main>
 
-    <script src="/ui/security-events/static/event.js"></script>
+    <script src="/ui/static/admin-auth.js?v=1"></script>
+    <script src="/ui/security-events/static/event.js?v=2"></script>
   </body>
 </html>

@@ -13,6 +13,7 @@ def test_authorized_action(sample_subject: Subject, sample_instruction: CashSett
         LifecycleAction.CREATE,
         sample_subject,
         sample_instruction,
+        event_id="20260628-FICC-I-1-SE-1",
         version_number=1,
         details={"authorization": {"summary": "allowed"}},
     )
@@ -40,6 +41,7 @@ def test_policy_denial(sample_subject: Subject, sample_instruction: CashSettleme
         LifecycleAction.APPROVE,
         sample_subject,
         sample_instruction,
+        event_id="20260628-FICC-I-1-SE-2",
         reason="denied",
     )
     assert event.severity == SecurityEventSeverity.ALERT
@@ -57,6 +59,7 @@ def test_policy_denial_preserves_is_alert_in_details(
         LifecycleAction.APPROVE,
         sample_subject,
         sample_instruction,
+        event_id="20260628-FICC-I-1-SE-3",
         reason="alert",
         details={"authorization": {"is_alert": True}},
     )
@@ -73,6 +76,7 @@ def test_obo_delegation_details(
         LifecycleAction.USE,
         subject,
         sample_instruction,
+        event_id="20260628-FICC-I-1-SE-4",
     )
     assert event.details["delegated_by"] == "payment-service"
     assert event.details["delegation"] == "on_behalf_of"

@@ -322,6 +322,7 @@ services:
       SEQUENCE_SERVICE_URL: http://sequence-service:8095
     volumes:
       - zitadel-bootstrap:/zitadel/bootstrap:ro
+      - ./payment-service/src/ps/static:/usr/local/lib/python3.12/site-packages/ps/static:ro
     depends_on:
       mongodb:
         condition: service_healthy

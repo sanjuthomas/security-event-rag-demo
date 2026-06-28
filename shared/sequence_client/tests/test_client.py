@@ -11,6 +11,39 @@ from sequence_client.errors import SequenceClientError, SequenceServiceUnavailab
 
 
 @pytest.mark.asyncio
+async def test_next_security_event_id_returns_sequence_id() -> None:
+    client = SequenceClient("http://sequence:8095")
+    response = httpx.Response(
+        200,
+        json={
+            "sequence_id": "20260628-FICC-I-32-SE-1",
+            "resource_id": "20260628-FICC-I-32",
+            "sequence_number": 1,
+            "counter_key": "20260628-FICC-I-32-SE",
+        },
+        request=httpx.Request(
+            "POST",
+            "http://sequence:8095/api/v1/sequences/security-events/next",
+        ),
+    )
+
+    with patch("sequence_client.client.httpx.AsyncClient") as mock_client_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client.post = AsyncMock(return_value=response)
+        mock_client_cls.return_value = mock_client
+
+        sequence_id = await client.next_security_event_id(
+            resource_id="20260628-FICC-I-32",
+        )
+
+    assert sequence_id == "20260628-FICC-I-32-SE-1"
+    payload = mock_client.post.await_args.kwargs["json"]
+    assert payload["resource_id"] == "20260628-FICC-I-32"
+
+
+@pytest.mark.asyncio
 async def test_next_instruction_id_returns_sequence_id() -> None:
     client = SequenceClient("http://sequence:8095")
 

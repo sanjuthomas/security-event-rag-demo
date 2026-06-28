@@ -1,6 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 
-from seq.models import NextSequenceRequest, NextSequenceResponse
+from seq.models import (
+    NextSecurityEventSequenceRequest,
+    NextSecurityEventSequenceResponse,
+    NextSequenceRequest,
+    NextSequenceResponse,
+)
 from seq.repository import SequenceRepositoryError
 from seq.service import SequenceService
 
@@ -22,5 +27,19 @@ async def next_sequence(
 ) -> NextSequenceResponse:
     try:
         return await service.next_sequence(request)
+    except SequenceRepositoryError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.post(
+    "/sequences/security-events/next",
+    response_model=NextSecurityEventSequenceResponse,
+)
+async def next_security_event_sequence(
+    request: NextSecurityEventSequenceRequest,
+    service: SequenceService = Depends(_sequence_service),
+) -> NextSecurityEventSequenceResponse:
+    try:
+        return await service.next_security_event_sequence(request)
     except SequenceRepositoryError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc

@@ -56,14 +56,6 @@ function resourceCell(resource = {}) {
   return `<span class="mono">${instructionId}</span>`;
 }
 
-function shortEventId(eventId) {
-  if (!eventId) {
-    return "—";
-  }
-  const parts = String(eventId).split("-");
-  return parts.length > 1 ? parts[parts.length - 1] : eventId;
-}
-
 function passesFilters(event) {
   const severity = severityFilter.value;
   const action = actionFilter.value;
@@ -103,8 +95,7 @@ function eventIdLink(eventId) {
     return "—";
   }
   const href = `/ui/security-events/events/${encodeURIComponent(eventId)}`;
-  const label = shortEventId(eventId);
-  return `<a class="event-id-link mono" href="${href}" title="${eventId}">${label}</a>`;
+  return `<a class="event-id-link mono" href="${href}">${eventId}</a>`;
 }
 
 function renderTable() {

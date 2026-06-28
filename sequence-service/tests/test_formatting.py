@@ -4,7 +4,14 @@ from datetime import date
 
 import pytest
 
-from seq.formatting import build_counter_key, build_sequence_id, compact_business_date, entity_type_code
+from seq.formatting import (
+    build_counter_key,
+    build_security_event_counter_key,
+    build_security_event_sequence_id,
+    build_sequence_id,
+    compact_business_date,
+    entity_type_code,
+)
 from seq.models import EntityType
 
 
@@ -24,6 +31,17 @@ def test_build_counter_key() -> None:
 
 def test_build_sequence_id() -> None:
     assert build_sequence_id("20260627-FICC-I", 3) == "20260627-FICC-I-3"
+
+
+def test_build_security_event_counter_key() -> None:
+    assert build_security_event_counter_key("20260628-FICC-I-32") == "20260628-FICC-I-32-SE"
+
+
+def test_build_security_event_sequence_id() -> None:
+    assert (
+        build_security_event_sequence_id("20260628-FICC-P-2", 3)
+        == "20260628-FICC-P-2-SE-3"
+    )
 
 
 @pytest.mark.parametrize(

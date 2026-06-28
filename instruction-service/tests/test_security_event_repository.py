@@ -14,9 +14,16 @@ def mock_collection() -> MagicMock:
 
 @pytest.fixture
 def repo(mock_collection: MagicMock) -> SecurityEventRepository:
+    sequence_client = AsyncMock()
+    sequence_client.next_security_event_id = AsyncMock(
+        return_value="20260628-FICC-I-1-SE-1"
+    )
     with patch("inst.security_event_repository.get_security_events_database") as mock_get_db:
         mock_get_db.return_value.__getitem__ = MagicMock(return_value=mock_collection)
-        yield SecurityEventRepository(collection_name="test-events")
+        yield SecurityEventRepository(
+            collection_name="test-events",
+            sequence_client=sequence_client,
+        )
 
 
 @pytest.mark.asyncio
@@ -45,9 +52,16 @@ async def test_insert_and_record_methods(
 ) -> None:
     mock_collection = MagicMock()
     mock_collection.insert_one = AsyncMock()
+    sequence_client = AsyncMock()
+    sequence_client.next_security_event_id = AsyncMock(
+        return_value="20260628-FICC-I-1-SE-1"
+    )
     with patch("inst.security_event_repository.get_security_events_database") as mock_get_db:
         mock_get_db.return_value.__getitem__ = MagicMock(return_value=mock_collection)
-        repo = SecurityEventRepository(collection_name="test-events")
+        repo = SecurityEventRepository(
+            collection_name="test-events",
+            sequence_client=sequence_client,
+        )
         with patch("inst.security_event_repository.kafka_publisher") as mock_kafka:
             mock_kafka.publish = AsyncMock()
             event = await repo.record_authorized_action(
@@ -57,4 +71,5 @@ async def test_insert_and_record_methods(
                 version_number=1,
             )
     assert isinstance(event, SecurityEvent)
+    assert event.event_id == "20260628-FICC-I-1-SE-1"
     assert event.event.action == "CREATE"
