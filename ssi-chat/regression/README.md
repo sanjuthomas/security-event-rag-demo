@@ -7,7 +7,7 @@ Each case posts a question to `POST /api/chat` and checks the response with flex
 ## Prerequisites
 
 - Full stack running (`docker compose up -d`)
-- Host **Ollama** with `snowflake-arctic-embed:m` and `llama3:8b` (or models configured in `.env`)
+- Host **Ollama** with `qwen3-embedding:0.6b` and `llama3:8b` (or models configured in `.env`)
 - Harness reachable at http://localhost:8091 (for `--seed`)
 
 ## Quick run

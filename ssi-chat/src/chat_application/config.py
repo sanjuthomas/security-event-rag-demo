@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     port: int = 8092
 
     ollama_url: str = "http://host.docker.internal:11434"
-    ollama_embedding_model: str = "snowflake-arctic-embed:m"
+    ollama_embedding_model: str = "qwen3-embedding:0.6b"
     ollama_chat_model: str = "llama3:8b"
     ollama_timeout_seconds: float = 300.0
 

@@ -40,7 +40,7 @@ For each message:
 
 1. Parse the fact event (security event or state snapshot).
 2. Upsert Neo4j nodes/relationships (see `neo4j-graph-model/`). User upserts also write `REPORTS_TO` from `supervisor_id`.
-3. Embed `search_text` with Ollama **`snowflake-arctic-embed:m`** → upsert Qdrant hybrid point.
+3. Embed `search_text` with Ollama **`qwen3-embedding:0.6b`** → upsert Qdrant hybrid point.
 
 ## Enriched document shape (instruction security events)
 
@@ -86,7 +86,7 @@ Copy `.env.example` to `.env` at the repo root to override defaults. Docker Comp
 | `KAFKA_INSTRUCTION_TOPIC` | `ssi-instructions` |
 | `KAFKA_PAYMENT_SECURITY_EVENTS_TOPIC` | `payment-security-events` |
 | `KAFKA_PAYMENTS_TOPIC` | `ssi-payments` |
-| `OLLAMA_EMBEDDING_MODEL` | `snowflake-arctic-embed:m` |
+| `OLLAMA_EMBEDDING_MODEL` | `qwen3-embedding:0.6b` |
 | `OLLAMA_CHAT_MODEL` | `llama3:8b` |
 | `QDRANT_COLLECTION` | `ssi_search_index` |
 | `NEO4J_URI` | `bolt://neo4j:7687` |

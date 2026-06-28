@@ -67,7 +67,7 @@ flowchart TB
     end
 
     subgraph ml [Host ML]
-        OLLAMA[Ollama — arctic-embed + llama3]
+        OLLAMA[Ollama — qwen3-embed + llama3]
     end
 
     ZITADEL --> ILM
@@ -234,7 +234,7 @@ Example authorization block on an APPROVE security event:
 
 No single retrieval strategy reliably handles the full range of questions a user asks over security events.
 
-**Dense vector search** (via `snowflake-arctic-embed:m` embeddings) excels at **semantic similarity** — "who tried to approve each other's instructions?" or "show me policy denial events for FX desk" — where the meaning matters more than the exact words. But dense search struggles with **exact identifiers**: if the user pastes a UUID like `2f75858d-d845-40d4-b9fb-43951a8c40e2`, the embedding of that string carries little semantic signal and the cosine similarity ranking is unreliable.
+**Dense vector search** (via `qwen3-embedding:0.6b` embeddings) excels at **semantic similarity** — "who tried to approve each other's instructions?" or "show me policy denial events for FX desk" — where the meaning matters more than the exact words. But dense search struggles with **exact identifiers**: if the user pastes a UUID like `2f75858d-d845-40d4-b9fb-43951a8c40e2`, the embedding of that string carries little semantic signal and the cosine similarity ranking is unreliable.
 
 **BM25 sparse search** is a classical term-frequency model (the same family as Elasticsearch's default scorer). It excels precisely where dense search fails: **exact-match tokens** — UUIDs, user IDs (`mo-100`, `ficc-300`), action names (`APPROVE`, `REJECT`), currency codes (`USD`, `EUR`). However, BM25 has no concept of synonymy or paraphrase — "declined" and "rejected" are unrelated tokens to BM25.
 
@@ -247,7 +247,7 @@ score_hybrid(doc) = RRF(rank_dense, rank_bm25)
 
 Reciprocal Rank Fusion (RRF, Cormack et al. 2009) combines ranked lists without requiring score normalisation. The constant `k=60` dampens the influence of very high ranks. Empirically, hybrid search consistently outperforms either retriever alone in recall@10 across heterogeneous query distributions — a result confirmed in the BEIR benchmark suite and Qdrant's own evaluations.
 
-Qdrant was chosen because it natively supports **named vectors** (one point can carry both a dense 768-d float32 vector and a BM25 sparse vector), runs hybrid queries server-side, and exposes a clean async Python client. The BM25 sparse encoder (`qdrant/bm25`) runs inside Qdrant itself — no separate sparse-encoder service is needed.
+Qdrant was chosen because it natively supports **named vectors** (one point can carry both a dense 1024-d float32 vector and a BM25 sparse vector), runs hybrid queries server-side, and exposes a clean async Python client. The BM25 sparse encoder (`qdrant/bm25`) runs inside Qdrant itself — no separate sparse-encoder service is needed.
 
 ---
 
@@ -290,13 +290,14 @@ The graph also serves as a **cross-validation layer**: if a UUID is present in t
 
 | Model | Dim | Context | Strengths | Why not used here |
 |---|---|---|---|---|
-| `snowflake-arctic-embed:m` ✓ | 768 | 512 | Strong retrieval quality, compact, English-focused | — |
-| `bge-m3:latest` | 1024 | 8192 | Multilingual, unified dense+sparse+multi-vector | Prior default; replaced for arctic retrieval quality |
-| `nomic-embed-text` | 768 | 8192 | Fast, small, good English recall | Lower MTEB retrieval vs arctic-m |
+| `qwen3-embedding:0.6b` ✓ | 1024 | 32 768 | Excellent retrieval, long context | — |
+| `snowflake-arctic-embed:m` | 768 | 512 | Compact English retrieval | Prior default; 512-token clipping risk |
+| `nomic-embed-text` | 768 | 8192 | Fast, good English recall | Lower retrieval vs Qwen3 embed |
+| `bge-m3:latest` | 1024 | 8192 | Multilingual, hybrid modes | Heavier; redundant with Qdrant BM25 |
 | `mxbai-embed-large` | 1024 | 512 | Strong English MTEB scores | Very short context window |
 | `text-embedding-3-small` (OpenAI) | 1536 | 8191 | High quality | Requires API key, not local |
 
-`snowflake-arctic-embed:m` is the default embedding model — **768-dimensional** dense vectors indexed in Qdrant alongside BM25 sparse retrieval. After changing embedding models, wipe volumes and re-seed so Qdrant is recreated with the new vector size.
+`qwen3-embedding:0.6b` is the default embedding model — **1024-dimensional** dense vectors indexed in Qdrant alongside BM25 sparse retrieval. After changing embedding models, wipe Qdrant and re-seed so the collection is recreated with the new vector size.
 
 **Model selection — LLM (Cypher generation + answer synthesis):**
 
@@ -331,7 +332,7 @@ All models and benchmarks in this demo were run on the following hardware:
 
 The unified memory architecture means the CPU, GPU, and Neural Engine share the same 64 GB pool with no PCIe copy overhead between host and device memory. The default `llama3:8b` chat model runs comfortably on this hardware; use `llama3:70b` only if you have enough RAM/GPU headroom.
 
-Embedding throughput with `snowflake-arctic-embed:m` is typically faster than larger multilingual encoders and is sufficient for real-time ETL indexing at demo event rates.
+Embedding throughput with `qwen3-embedding:0.6b` is sufficient for real-time ETL indexing at demo event rates, with a 32K-token context window that avoids clipping typical security-event `search_text`.
 
 ---
 
@@ -373,17 +374,17 @@ Embedding throughput with `snowflake-arctic-embed:m` is typically faster than la
 
 ## Models
 
-### Embedding model — `snowflake-arctic-embed:m`
+### Embedding model — `qwen3-embedding:0.6b`
 
-The ETL and Chat use [Snowflake Arctic Embed M](https://huggingface.co/Snowflake/snowflake-arctic-embed-m-v1.5) served via Ollama for dense vector embeddings.
+The ETL and Chat use [Qwen3-Embedding-0.6B](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B) served via Ollama for dense vector embeddings.
 
 | Property | Value |
 |----------|-------|
-| Model | `snowflake-arctic-embed:m` |
-| Provider | Snowflake |
-| Output dimension | **768** float32 |
-| Context window | 512 tokens (query prefix applied by Ollama) |
-| Strengths | Strong retrieval quality on English enterprise text |
+| Model | `qwen3-embedding:0.6b` |
+| Provider | Alibaba (Qwen) |
+| Output dimension | **1024** float32 |
+| Context window | 32 768 tokens |
+| Strengths | Strong retrieval quality, long context for OPA authorization summaries |
 
 Embeddings are queried through `POST /api/embed` on the local Ollama instance. Each document is embedded at write time by the ETL and at query time by PolicyPilot for similarity search.
 
@@ -421,7 +422,7 @@ Both calls are made via `POST /api/chat` on the local Ollama instance with `stre
 |-------------|-------|
 | Docker + Docker Compose | All containers are defined in `docker-compose.yml` |
 | [Ollama](https://ollama.com) running on the host | Needed by ETL and Chat; containers reach it via `host.docker.internal:11434` |
-| `snowflake-arctic-embed:m` model pulled | `ollama pull snowflake-arctic-embed:m` |
+| `qwen3-embedding:0.6b` model pulled | `ollama pull qwen3-embedding:0.6b` |
 | Chat model pulled | Default: `llama3:8b` — `ollama pull llama3:8b` |
 
 ---
@@ -433,7 +434,7 @@ Both calls are made via `POST /api/chat` on the local Ollama instance with `stre
 cp .env.example .env
 
 # 1. Pull Ollama models on the host
-ollama pull snowflake-arctic-embed:m
+ollama pull qwen3-embedding:0.6b
 ollama pull llama3:8b
 
 # 2. Start the full stack
@@ -673,7 +674,7 @@ User question + search mode (events | instructions | payments | all)
 │
 ├─ UUID detected? ──► Exact Qdrant fetch + fixed Neo4j lookup (pinned to top of context)
 │
-├─► Qdrant dense vector search (snowflake-arctic-embed:m), filtered by mode
+├─► Qdrant dense vector search (qwen3-embedding:0.6b), filtered by mode
 ├─► Qdrant BM25 sparse search, filtered by mode
 └─► Ollama → Cypher → Neo4j (mode-specific system prompt)
          │
