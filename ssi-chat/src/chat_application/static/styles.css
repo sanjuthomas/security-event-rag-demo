@@ -176,7 +176,56 @@ body {
 
 .message-body {
   line-height: 1.55;
+}
+
+.message-body .md-text {
   white-space: pre-wrap;
+}
+
+.message-body .table-wrap {
+  overflow-x: auto;
+  margin: 0.75rem 0 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.message-body .md-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.message-body .md-table th,
+.message-body .md-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 0.5rem 0.65rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.message-body .md-table th {
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.message-body .md-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.message-body .md-table tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.message-body .md-table td:first-child {
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  white-space: nowrap;
 }
 
 .chat-form {

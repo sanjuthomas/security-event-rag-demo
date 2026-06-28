@@ -146,11 +146,116 @@ class TestRagServiceAsk:
             mode="payments",
         )
         assert response.answer.startswith("WHO:")
-        assert "Policy basis:" in response.answer
+        assert "Policy basis:" in response.answer or "Policy basis (" in response.answer
+        assert "Policy check" in response.answer
         assert "role FUNDING_APPROVER" in response.answer
         assert "covers LOB FICC" in response.answer
         assert "amount $1 million within subject and absolute limits" in response.answer
         assert "1e+06" not in response.answer
+        mock_ollama.synthesize_answer.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_ask_max_payments_per_instruction(
+        self, rag_service, mock_ollama, mock_qdrant, mock_neo4j
+    ) -> None:
+        iid = "3bcb9b9a-9415-44ce-b707-4cc4c8281bb9"
+        mock_qdrant.search_vector = MagicMock(return_value=[])
+        mock_qdrant.search_bm25 = MagicMock(return_value=[])
+        mock_neo4j.run_cypher = AsyncMock(
+            return_value=[
+                {
+                    "instruction_id": iid,
+                    "payment_count": 2,
+                    "payment_id": "pay-1",
+                    "created_at": "2026-06-27T10:00:00Z",
+                    "creator_display": "Creator One (c-1)",
+                    "approver_display": "Approver One (a-1)",
+                },
+                {
+                    "instruction_id": iid,
+                    "payment_count": 2,
+                    "payment_id": "pay-2",
+                    "created_at": "2026-06-27T11:00:00Z",
+                    "creator_display": "Creator Two (c-2)",
+                    "approver_display": "Approver Two (a-2)",
+                },
+            ]
+        )
+
+        response = await rag_service.ask(
+            "Which instruction has the maximum number of payments?",
+            [],
+            mode="payments",
+        )
+        assert response.answer.startswith(f"Instruction: {iid}")
+        assert "Total payments: 2" in response.answer
+        assert "Payment ID" in response.answer
+        assert "| pay-1" in response.answer
+        mock_ollama.synthesize_answer.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_ask_payments_for_instruction(
+        self, rag_service, mock_ollama, mock_qdrant, mock_neo4j
+    ) -> None:
+        iid = "3bcb9b9a-9415-44ce-b707-4cc4c8281bb9"
+        mock_qdrant.search_vector = MagicMock(return_value=[])
+        mock_qdrant.search_bm25 = MagicMock(return_value=[])
+        mock_neo4j.run_cypher = AsyncMock(
+            return_value=[
+                {
+                    "payment_id": "92831268-b1d0-44c8-a24a-b84a912cb051",
+                    "instruction_id": iid,
+                    "status": "APPROVED",
+                    "amount": 10_000_000,
+                    "currency": "USD",
+                    "value_date": "2026-06-28",
+                    "owning_lob": "FICC",
+                    "creator_display": "Nakamura, Kenji (pay-102)",
+                    "approver_display": "Laurent, Sophie (pay-201)",
+                }
+            ]
+        )
+
+        response = await rag_service.ask(
+            f"Can you list the payments for instruction {iid}?",
+            [],
+            mode="payments",
+        )
+        assert response.answer.startswith(f"There are 1 payments in total for instruction {iid}.")
+        assert "Payment ID" in response.answer
+        assert "92831268-b1d0-44c8-a24a-b84a912cb051" in response.answer
+        assert "10,000,000.00 USD" in response.answer
+        mock_ollama.synthesize_answer.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_ask_alert_ranking(
+        self, rag_service, mock_ollama, mock_qdrant, mock_neo4j
+    ) -> None:
+        mock_qdrant.search_vector = MagicMock(return_value=[])
+        mock_qdrant.search_bm25 = MagicMock(return_value=[])
+        mock_neo4j.run_cypher = AsyncMock(
+            side_effect=[
+                [
+                    {
+                        "user_id": "fx-201",
+                        "actor_display": "Hassan, Amira (fx-201)",
+                        "alert_count": 12,
+                        "payment_alerts": 4,
+                        "instruction_alerts": 8,
+                    }
+                ],
+                [],
+            ]
+        )
+
+        response = await rag_service.ask(
+            "Which user triggered the most policy denial alerts this week?",
+            [],
+            mode="events",
+        )
+        assert "policy denial alerts (this week)" in response.answer
+        assert "Hassan, Amira (fx-201)" in response.answer
+        assert "Total Alerts" in response.answer
         mock_ollama.synthesize_answer.assert_not_called()
 
     @pytest.mark.asyncio

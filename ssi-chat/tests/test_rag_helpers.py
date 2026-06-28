@@ -4,6 +4,9 @@ from chat_application.rag import (
     RagService,
     _append_policy_basis,
     _display_from_snap_user,
+    _format_alert_ranking_answer,
+    _format_max_payments_per_instruction_answer,
+    _format_payments_for_instruction_answer,
     _format_usd_amount,
     _humanize_authorization_text,
     _humanize_policy_basis,
@@ -71,7 +74,138 @@ class TestUsdAmountFormatting:
         why = "Approved under policy."
         basis = ["amount 1e+06 within subject and absolute limits"]
         result = _append_policy_basis(why, basis)
+        assert "Policy basis (1 checks):" in result
+        assert "Policy check" in result
+        assert "| --- |" in result or "| ---  |" in result
         assert "amount $1 million within subject and absolute limits" in result
+
+
+class TestMaxPaymentsPerInstructionAnswer:
+    def test_formats_instruction_summary_and_payment_rows(self) -> None:
+        iid = "3bcb9b9a-9415-44ce-b707-4cc4c8281bb9"
+        rows = [
+            {
+                "instruction_id": iid,
+                "payment_count": 2,
+                "payment_id": "pay-1",
+                "created_at": "2026-06-27T10:00:00Z",
+                "creator_display": "Creator One (c-1)",
+                "approver_display": "Approver One (a-1)",
+            },
+            {
+                "instruction_id": iid,
+                "payment_count": 2,
+                "payment_id": "pay-2",
+                "created_at": "2026-06-27T11:00:00Z",
+                "creator_display": "Creator Two (c-2)",
+                "approver_display": "Approver Two (a-2)",
+            },
+        ]
+        answer = _format_max_payments_per_instruction_answer(rows)
+        assert answer is not None
+        assert f"Instruction: {iid}" in answer
+        assert "Total payments: 2" in answer
+        assert "Payment ID" in answer
+        assert "Created At" in answer
+        assert "| pay-1" in answer
+        assert "| pay-2" in answer
+
+    def test_dedupes_duplicate_payment_rows_and_uses_row_count(self) -> None:
+        iid = "3bcb9b9a-9415-44ce-b707-4cc4c8281bb9"
+        rows = [
+            {
+                "instruction_id": iid,
+                "payment_count": 20,
+                "payment_id": "pay-1",
+                "created_at": "2026-06-27T10:00:00Z",
+                "creator_display": "Creator One (c-1)",
+                "approver_display": "Approver One (a-1)",
+            },
+            {
+                "instruction_id": iid,
+                "payment_count": 20,
+                "payment_id": "pay-1",
+                "created_at": "2026-06-27T10:00:00Z",
+                "creator_display": "Creator One (c-1)",
+                "approver_display": "Approver One (a-1)",
+            },
+            {
+                "instruction_id": iid,
+                "payment_count": 20,
+                "payment_id": "pay-2",
+                "created_at": "2026-06-27T11:00:00Z",
+                "creator_display": "Creator Two (c-2)",
+                "approver_display": "Approver Two (a-2)",
+            },
+        ]
+        answer = _format_max_payments_per_instruction_answer(rows)
+        assert answer is not None
+        assert "Total payments: 2" in answer
+        assert answer.count("pay-1") == 1
+
+
+class TestPaymentsForInstructionAnswer:
+    def test_includes_total_and_payment_rows(self) -> None:
+        iid = "3bcb9b9a-9415-44ce-b707-4cc4c8281bb9"
+        rows = [
+            {
+                "payment_id": "92831268-b1d0-44c8-a24a-b84a912cb051",
+                "instruction_id": iid,
+                "status": "APPROVED",
+                "amount": 10_000_000,
+                "currency": "USD",
+                "value_date": "2026-06-28",
+                "owning_lob": "FICC",
+                "creator_display": "Nakamura, Kenji (pay-102)",
+                "approver_display": "Laurent, Sophie (pay-201)",
+            },
+            {
+                "payment_id": "9b3251c9-d28e-4ad5-9bf4-dbc3c4fc13d8",
+                "instruction_id": iid,
+                "status": "APPROVED",
+                "amount": 1_000_000,
+                "currency": "USD",
+                "value_date": "2026-06-28",
+                "owning_lob": "FICC",
+                "creator_display": "Rodriguez, Emily (pay-101)",
+                "approver_display": "Laurent, Sophie (pay-201)",
+            },
+        ]
+        answer = _format_payments_for_instruction_answer(iid, rows)
+        assert answer.startswith(f"There are 2 payments in total for instruction {iid}.")
+        assert "Payment ID" in answer
+        assert "Status" in answer
+        assert "92831268-b1d0-44c8-a24a-b84a912cb051" in answer
+        assert "10,000,000.00 USD" in answer
+
+
+class TestAlertRankingAnswer:
+    def test_formats_ranking_table(self) -> None:
+        rows = [
+            {
+                "user_id": "fx-201",
+                "actor_display": "Hassan, Amira (fx-201)",
+                "alert_count": 12,
+                "payment_alerts": 4,
+                "instruction_alerts": 8,
+            },
+            {
+                "user_id": "pay-101",
+                "actor_display": "Rodriguez, Emily (pay-101)",
+                "alert_count": 5,
+                "payment_alerts": 5,
+                "instruction_alerts": 0,
+            },
+        ]
+        answer = _format_alert_ranking_answer(
+            "Which user triggered the most policy denial alerts this week?",
+            rows,
+        )
+        assert "policy denial alerts (this week)" in answer
+        assert "User" in answer
+        assert "Total Alerts" in answer
+        assert "Hassan, Amira (fx-201)" in answer
+        assert "| 12" in answer or "| 12 " in answer
 
 
 class TestDisplayFromSnapUser:

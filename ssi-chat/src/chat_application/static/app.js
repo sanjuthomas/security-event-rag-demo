@@ -133,7 +133,12 @@ function appendMessage(role, content) {
     <div class="message-role">${role === "user" ? "You" : "Assistant"}</div>
     <div class="message-body"></div>
   `;
-  wrap.querySelector(".message-body").textContent = content;
+  const body = wrap.querySelector(".message-body");
+  if (role === "assistant") {
+    body.innerHTML = renderAssistantMarkdown(content);
+  } else {
+    body.textContent = content;
+  }
   thread.appendChild(wrap);
   thread.scrollTop = thread.scrollHeight;
 }

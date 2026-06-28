@@ -26,11 +26,16 @@ async def ui_payment_detail(payment_id: str) -> FileResponse:
 async def ui_list_payments(
     status: str | None = Query(default=None),
     owning_lob: str | None = Query(default=None),
+    instruction_id: str | None = Query(default=None),
     limit: int = Query(default=200, ge=1, le=500),
     _admin=Depends(get_admin_subject),
 ) -> dict:
     repo = PaymentRepository()
-    payments = await repo.list(status=status, limit=limit)
+    payments = await repo.list(
+        status=status,
+        instruction_id=instruction_id.strip() if instruction_id else None,
+        limit=limit,
+    )
     if owning_lob:
         payments = [p for p in payments if p.owning_lob == owning_lob]
     return {

@@ -5,6 +5,7 @@ const emptyState = document.getElementById("empty-state");
 const loadStatus = document.getElementById("load-status");
 const statTotal = document.getElementById("stat-total");
 const statusFilter = document.getElementById("status-filter");
+const instructionFilter = document.getElementById("instruction-filter");
 const lobFilter = document.getElementById("lob-filter");
 const typeFilter = document.getElementById("type-filter");
 const refreshBtn = document.getElementById("refresh-btn");
@@ -114,6 +115,15 @@ function renderTable({ highlightFirst = false } = {}) {
   }
 }
 
+function buildPaymentsUrl() {
+  const params = new URLSearchParams({ limit: String(MAX_ROWS) });
+  const instructionId = instructionFilter.value.trim();
+  if (instructionId) {
+    params.set("instruction_id", instructionId);
+  }
+  return `/api/ui/payments?${params.toString()}`;
+}
+
 function setLoadStatus(state, label) {
   loadStatus.className = `status-pill status-${state}`;
   loadStatus.textContent = label;
@@ -126,7 +136,7 @@ async function loadPayments() {
   }
   setLoadStatus("connecting", "Loading");
   try {
-    const response = await AdminAuth.adminFetch("/api/ui/payments?limit=500");
+    const response = await AdminAuth.adminFetch(buildPaymentsUrl());
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const payload = await response.json();
     payments = payload.payments || [];
@@ -151,6 +161,13 @@ function connectStream() {
 }
 
 statusFilter.addEventListener("change", () => renderTable());
+instructionFilter.addEventListener("change", () => void loadPayments());
+instructionFilter.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    void loadPayments();
+  }
+});
 lobFilter.addEventListener("change", () => renderTable());
 typeFilter.addEventListener("change", () => renderTable());
 

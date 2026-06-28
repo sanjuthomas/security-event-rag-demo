@@ -116,13 +116,18 @@ body {
   font-size: 0.8rem;
 }
 
-select, .btn {
+select, .btn, .filter input[type="text"] {
   border: 1px solid var(--border);
   background: var(--panel);
   color: var(--text);
   border-radius: 0.6rem;
   padding: 0.55rem 0.8rem;
   font: inherit;
+}
+
+.filter input[type="text"] {
+  min-width: 18rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 .btn { cursor: pointer; }

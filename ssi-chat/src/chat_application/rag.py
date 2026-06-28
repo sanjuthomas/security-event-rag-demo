@@ -16,12 +16,18 @@ from chat_application.authorization_client import (
 from chat_application.config import settings
 from chat_application.cypher import (
     extract_uuids,
+    instruction_id_from_list_payments_question,
+    is_alert_ranking_question,
+    is_max_payments_per_instruction_question,
+    is_payments_for_instruction_question,
     load_graph_schema,
     normalize_read_only_cypher,
     plan_graph_queries,
+    ranking_period_label,
     validate_read_only_cypher,
 )
 from chat_application.eligibility import eligible_approver_target
+from chat_application.formatting import format_markdown_table
 from chat_application.models import ChatMessage, ChatResponse, SearchMode, SourceHit
 from chat_application.neo4j import Neo4jClient
 from chat_application.ollama import OllamaClient
@@ -104,8 +110,10 @@ def _parse_authorization_basis(value: Any) -> list[str]:
 def _append_policy_basis(why: str, basis: list[str]) -> str:
     if not basis:
         return why
-    bullets = "\n".join(f"  • {point}" for point in _humanize_policy_basis(basis))
-    return f"{why.rstrip()}\n\nPolicy basis:\n{bullets}"
+    readable = _humanize_policy_basis(basis)
+    table_rows = [[index, point] for index, point in enumerate(readable, start=1)]
+    table = format_markdown_table(["#", "Policy check"], table_rows)
+    return f"{why.rstrip()}\n\nPolicy basis ({len(readable)} checks):\n\n{table}"
 
 
 def _is_instruction_approval_question(message: str, mode: SearchMode) -> bool:
@@ -126,8 +134,151 @@ def _is_payment_approval_question(message: str, mode: SearchMode) -> bool:
     return mode == "payments" or "payment" in q
 
 
+def _dedupe_payment_graph_rows(graph_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    deduped: list[dict[str, Any]] = []
+    seen_payment_ids: set[str] = set()
+    for row in graph_rows:
+        payment_id = row.get("payment_id")
+        if not payment_id or payment_id in seen_payment_ids:
+            continue
+        seen_payment_ids.add(payment_id)
+        deduped.append(row)
+    return deduped
+
+
+def _format_max_payments_per_instruction_answer(
+    graph_rows: list[dict[str, Any]],
+) -> str | None:
+    if not graph_rows:
+        return "No instruction payment counts were found in the graph."
+
+    instruction_id = graph_rows[0].get("instruction_id")
+    if not instruction_id:
+        return None
+
+    payment_rows = _dedupe_payment_graph_rows(graph_rows)
+    table_rows = [
+        [
+            row.get("payment_id"),
+            row.get("created_at") or "—",
+            row.get("creator_display") or "—",
+            row.get("approver_display") or "—",
+        ]
+        for row in payment_rows
+    ]
+
+    lines = [
+        f"Instruction: {instruction_id}",
+        f"Total payments: {len(table_rows)}",
+        "",
+    ]
+    if table_rows:
+        lines.append(
+            format_markdown_table(
+                ["Payment ID", "Created At", "Creator", "Approver"],
+                table_rows,
+            )
+        )
+    else:
+        lines.append("_No payments found._")
+    return "\n".join(lines)
+
+
+def _format_payment_amount_display(amount: Any, currency: Any) -> str:
+    if amount is None:
+        return "N/A"
+    try:
+        value = float(amount)
+    except (TypeError, ValueError):
+        return str(amount)
+    formatted = f"{value:,.2f}"
+    if currency:
+        return f"{formatted} {currency}"
+    return formatted
+
+
+def _format_payments_for_instruction_answer(
+    instruction_id: str,
+    graph_rows: list[dict[str, Any]],
+) -> str:
+    payment_rows = _dedupe_payment_graph_rows(graph_rows)
+    table_rows = [
+        [
+            row.get("payment_id"),
+            row.get("status") or "N/A",
+            _format_payment_amount_display(row.get("amount"), row.get("currency")),
+            row.get("value_date") or "N/A",
+            row.get("owning_lob") or "N/A",
+            row.get("creator_display") or "N/A",
+            row.get("approver_display") or "N/A",
+        ]
+        for row in payment_rows
+    ]
+
+    summary = f"There are {len(table_rows)} payments in total for instruction {instruction_id}."
+    if not table_rows:
+        return f"{summary}\n\n_No payments found._"
+
+    return (
+        f"{summary}\n\n"
+        f"{format_markdown_table(['Payment ID', 'Status', 'Amount', 'Value Date', 'LOB', 'Creator', 'Approver'], table_rows)}"
+    )
+
+
+def _extract_alert_ranking_rows(graph_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        row
+        for row in graph_rows
+        if "alert_count" in row and "actor_display" in row
+    ]
+
+
+def _alert_ranking_domain_label(message: str) -> str:
+    q = message.lower()
+    if "payment" in q and "instruction" not in q:
+        return "payment policy denial alerts"
+    if "instruction" in q and "payment" not in q:
+        return "instruction policy denial alerts"
+    return "policy denial alerts"
+
+
+def _format_alert_ranking_answer(message: str, graph_rows: list[dict[str, Any]]) -> str:
+    ranking_rows = _extract_alert_ranking_rows(graph_rows)
+    if not ranking_rows:
+        return "No policy denial alert rankings were found in the graph."
+
+    period = ranking_period_label(message)
+    domain = _alert_ranking_domain_label(message)
+    table_rows = [
+        [
+            row.get("actor_display") or "—",
+            row.get("user_id") or "—",
+            row.get("alert_count", 0),
+            row.get("payment_alerts", 0),
+            row.get("instruction_alerts", 0),
+        ]
+        for row in ranking_rows
+    ]
+
+    if len(ranking_rows) == 1:
+        top = ranking_rows[0]
+        summary = (
+            f"The user with the most {domain} ({period}) is "
+            f"{top.get('actor_display')} with {top.get('alert_count')} alert(s)."
+        )
+    else:
+        summary = f"User ranking by {domain} ({period}): {len(table_rows)} user(s)."
+
+    return (
+        f"{summary}\n\n"
+        f"{format_markdown_table(['User', 'User ID', 'Total Alerts', 'Payment Alerts', 'Instruction Alerts'], table_rows)}"
+    )
+
+
 def _should_lookup_payment_ids(message: str, uuids: list[str], mode: SearchMode) -> bool:
     if not uuids:
+        return False
+    if is_payments_for_instruction_question(message):
         return False
     if mode == "payments":
         return True
@@ -318,6 +469,17 @@ class RagService:
             answer = await self._synthesize_payment_approval_answer(
                 message, event_ids, merged, graph_result["rows"]
             )
+        if answer is None and is_max_payments_per_instruction_question(message):
+            answer = _format_max_payments_per_instruction_answer(graph_result["rows"])
+        if answer is None and is_payments_for_instruction_question(message):
+            instruction_id = instruction_id_from_list_payments_question(message)
+            if instruction_id:
+                answer = _format_payments_for_instruction_answer(
+                    instruction_id,
+                    graph_result["rows"],
+                )
+        if answer is None and is_alert_ranking_question(message, mode=mode):
+            answer = _format_alert_ranking_answer(message, graph_result["rows"])
         if answer is None:
             answer = await self.ollama.synthesize_answer(
                 message, context, chat_history, mode=mode

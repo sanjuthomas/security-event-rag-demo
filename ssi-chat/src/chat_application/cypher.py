@@ -54,6 +54,26 @@ _RANKING_QUESTION = re.compile(
     re.IGNORECASE,
 )
 
+_MAX_PAYMENTS_PER_INSTRUCTION = re.compile(
+    r"\bwhich instruction\b.*\bpayments?\b|"
+    r"\binstruction\b.*\b(maximum|max|most|highest|largest|greatest|biggest)\b.*\bpayments?\b|"
+    r"\b(maximum|max|most|highest|largest|greatest|biggest)\b.*\bpayments?\b.*\binstruction\b",
+    re.IGNORECASE,
+)
+
+_LIST_PAYMENTS_FOR_INSTRUCTION = re.compile(
+    r"\b(list|show|enumerate|display)\b.*\bpayments?\b|"
+    r"\bpayments?\s+for\s+instruction\b",
+    re.IGNORECASE,
+)
+
+_INSTRUCTION_UUID_IN_QUESTION = re.compile(
+    r"instruction\s+([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})",
+    re.IGNORECASE,
+)
+
+_PAYMENT_STATUSES = ("APPROVED", "SUBMITTED", "REJECTED", "DRAFT", "CANCELLED", "PENDING")
+
 _DENIAL_QUESTION = re.compile(
     r"\b(policy denial|denials?|denied|alert|alerts)\b",
     re.IGNORECASE,
@@ -115,6 +135,60 @@ def normalize_read_only_cypher(cypher: str) -> str:
 
 def is_count_question(question: str) -> bool:
     return bool(_COUNT_QUESTION.search(question))
+
+
+def is_max_payments_per_instruction_question(question: str) -> bool:
+    q = question.lower()
+    return "instruction" in q and "payment" in q and bool(_MAX_PAYMENTS_PER_INSTRUCTION.search(question))
+
+
+def is_payments_for_instruction_question(question: str) -> bool:
+    q = question.lower()
+    if not extract_uuids(question):
+        return False
+    if is_max_payments_per_instruction_question(question):
+        return False
+    if "approv" in q and ("who" in q or "when" in q or "why" in q):
+        return False
+    if "payment" not in q or "instruction" not in q:
+        return False
+    return bool(_LIST_PAYMENTS_FOR_INSTRUCTION.search(question))
+
+
+def instruction_id_from_list_payments_question(question: str) -> str | None:
+    match = _INSTRUCTION_UUID_IN_QUESTION.search(question)
+    if match:
+        return match.group(1)
+    uuids = extract_uuids(question)
+    return uuids[0] if uuids else None
+
+
+def payment_status_filter_from_question(question: str) -> str | None:
+    upper = question.upper()
+    for status in _PAYMENT_STATUSES:
+        if status in upper:
+            return status
+    return None
+
+
+def is_alert_ranking_question(question: str, *, mode: str) -> bool:
+    if mode != "events":
+        return False
+    flags = _question_flags(question)
+    return (
+        flags["ranking"]
+        and flags["denial"]
+        and (flags["alerts"] or flags["denial"])
+    )
+
+
+def ranking_period_label(question: str) -> str:
+    flags = _question_flags(question)
+    if flags["today"]:
+        return "today"
+    if flags["week"]:
+        return "this week"
+    return "all time"
 
 
 def _question_flags(question: str) -> dict[str, bool]:
@@ -243,6 +317,74 @@ LIMIT 1""",
     ]
 
 
+def _payments_for_instruction_queries(
+    instruction_id: str,
+    *,
+    status: str | None = None,
+) -> list[tuple[str, str]]:
+    status_filter = f"AND p.status = '{status}'" if status else ""
+    return [
+        (
+            "payments_for_instruction",
+            f"""MATCH (i:Instruction {{instruction_id: '{instruction_id}'}})-[:HAS_PAYMENT]->(p:Payment)
+WHERE true {status_filter}
+WITH collect(DISTINCT p) AS payments
+UNWIND payments AS p
+OPTIONAL MATCH (creator:User)-[:CREATED_PAYMENT]->(p)
+OPTIONAL MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
+WITH p,
+     head(collect(DISTINCT creator)) AS creator,
+     head(collect(DISTINCT approver)) AS approver
+RETURN p.payment_id AS payment_id,
+       p.instruction_id AS instruction_id,
+       p.status AS status,
+       p.amount AS amount,
+       p.currency AS currency,
+       p.value_date AS value_date,
+       p.owning_lob AS owning_lob,
+       p.created_at AS created_at,
+       coalesce(creator.display_name, creator.user_id, p.creator_user_id, '') AS creator_display,
+       coalesce(approver.display_name, approver.user_id, p.approver_user_id, '') AS approver_display
+ORDER BY p.created_at ASC
+LIMIT 200""",
+        ),
+    ]
+
+
+def _max_payments_per_instruction_queries() -> list[tuple[str, str]]:
+    """Instruction with the most payments, plus one row per payment."""
+    return [
+        (
+            "max_payments_per_instruction",
+            """MATCH (i:Instruction)-[:HAS_PAYMENT]->(p:Payment)
+WITH i.instruction_id AS instruction_id, count(DISTINCT p) AS payment_count
+ORDER BY payment_count DESC, instruction_id ASC
+LIMIT 1
+WITH instruction_id, payment_count
+MATCH (i:Instruction {instruction_id: instruction_id})-[:HAS_PAYMENT]->(p:Payment)
+WITH instruction_id, payment_count, p
+ORDER BY p.created_at ASC
+WITH instruction_id, payment_count, collect(DISTINCT p) AS payments
+UNWIND payments AS p
+OPTIONAL MATCH (creator:User)-[:CREATED_PAYMENT]->(p)
+OPTIONAL MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
+WITH instruction_id,
+     payment_count,
+     p,
+     head(collect(DISTINCT creator)) AS creator,
+     head(collect(DISTINCT approver)) AS approver
+RETURN instruction_id,
+       payment_count,
+       p.payment_id AS payment_id,
+       p.created_at AS created_at,
+       coalesce(creator.display_name, creator.user_id, p.creator_user_id, '') AS creator_display,
+       coalesce(approver.display_name, approver.user_id, p.approver_user_id, '') AS approver_display
+ORDER BY created_at ASC
+LIMIT 200""",
+        ),
+    ]
+
+
 def _payment_approval_lookup_queries(payment_id: str) -> list[tuple[str, str]]:
     return [
         (
@@ -301,9 +443,21 @@ def plan_graph_queries(question: str, *, mode: str) -> list[tuple[str, str]] | N
             return _instruction_approval_lookup_queries(uuids[0])
 
     if mode in ("payments", "events") and _is_payment_approval_lookup(question, mode=mode):
-        uuids = extract_uuids(question)
-        if uuids:
-            return _payment_approval_lookup_queries(uuids[0])
+        if not is_payments_for_instruction_question(question):
+            uuids = extract_uuids(question)
+            if uuids:
+                return _payment_approval_lookup_queries(uuids[0])
+
+    if mode in ("payments", "all") and is_payments_for_instruction_question(question):
+        instruction_id = instruction_id_from_list_payments_question(question)
+        if instruction_id:
+            return _payments_for_instruction_queries(
+                instruction_id,
+                status=payment_status_filter_from_question(question),
+            )
+
+    if mode in ("payments", "all") and is_max_payments_per_instruction_question(question):
+        return _max_payments_per_instruction_queries()
 
     if (
         mode == "events"

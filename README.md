@@ -13,13 +13,13 @@ The chat is designed to surface **fraud patterns, compliance violations, and col
 - _Has any user attempted to approve an instruction they originally created?_
 
 **Inversion of control — segregation of duties:**
-- _Are there any instructions approved by someone who directly reports to the instruction's creator?_
+- _Are there any instructions approved by someone who reports directly to the creator of the instructions?_
 
 > Banks enforce a hierarchy rule: a subordinate must not approve their manager's instruction. This is an inversion of control violation — the approval authority flows the wrong way up the reporting chain.
 
 **Compliance investigation:**
 - _Who created the instruction that Michael Torres rejected?_
-- _Who approved instruction `<uuid>` and why was it allowed?_ (full OPA audit trail — approver, timestamp, policy rationale)
+- _Who approved instruction `<uuid>`, and why was it allowed?_ (full OPA audit trail — approver, timestamp, policy rationale)
 - _Show me all ALERT events for FICC instructions in the last 7 days._
 - _Which users triggered the most policy denial alerts this week?_
 
@@ -32,7 +32,7 @@ The chat is designed to surface **fraud patterns, compliance violations, and col
 
 **Payment policy and compliance:**
 - _How many payment ALERT events happened today?_
-- _Which user triggered the most policy denial alerts this week?_
+- _Who can approve payment `<uuid>`?_
 - _Are there any payments where the approver directly reports to the payment creator?_
 - _Show me all APPROVED payments over $10M for FICC this week._
 

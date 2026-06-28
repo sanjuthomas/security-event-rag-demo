@@ -5,10 +5,16 @@ from types import SimpleNamespace
 import pytest
 from chat_application.cypher import (
     extract_uuids,
+    instruction_id_from_list_payments_question,
+    is_alert_ranking_question,
     is_count_question,
+    is_max_payments_per_instruction_question,
+    is_payments_for_instruction_question,
     load_graph_schema,
     normalize_read_only_cypher,
+    payment_status_filter_from_question,
     plan_graph_queries,
+    ranking_period_label,
     records_to_rows,
     row_summary,
     validate_read_only_cypher,
@@ -147,6 +153,38 @@ class TestPlanGraphQueries:
         assert pid in planned[0][1]
         assert "APPROVE_PAYMENT" in planned[0][1]
 
+    def test_max_payments_per_instruction(self) -> None:
+        planned = plan_graph_queries(
+            "Which instruction has the maximum number of payments?",
+            mode="payments",
+        )
+        assert planned is not None
+        assert planned[0][0] == "max_payments_per_instruction"
+        assert "HAS_PAYMENT" in planned[0][1]
+        assert "count(DISTINCT p)" in planned[0][1]
+        assert "collect(DISTINCT p)" in planned[0][1]
+        assert "creator_display" in planned[0][1]
+
+    def test_payments_for_instruction(self) -> None:
+        iid = "3bcb9b9a-9415-44ce-b707-4cc4c8281bb9"
+        planned = plan_graph_queries(
+            f"Can you list the payments for instruction {iid}?",
+            mode="payments",
+        )
+        assert planned is not None
+        assert planned[0][0] == "payments_for_instruction"
+        assert iid in planned[0][1]
+        assert "collect(DISTINCT p)" in planned[0][1]
+
+    def test_payments_for_instruction_approved_filter(self) -> None:
+        iid = "3bcb9b9a-9415-44ce-b707-4cc4c8281bb9"
+        planned = plan_graph_queries(
+            f"List all APPROVED payments for instruction {iid}.",
+            mode="payments",
+        )
+        assert planned is not None
+        assert "p.status = 'APPROVED'" in planned[0][1]
+
     def test_non_count_question_returns_none(self) -> None:
         assert plan_graph_queries("List recent events", mode="events") is None
 
@@ -177,6 +215,53 @@ class TestIsCountQuestion:
 
     def test_non_count_question(self) -> None:
         assert is_count_question("Who approved this instruction?") is False
+
+
+class TestIsMaxPaymentsPerInstructionQuestion:
+    def test_detects_max_payments_question(self) -> None:
+        assert is_max_payments_per_instruction_question(
+            "Which instruction has the maximum number of payments?"
+        )
+
+    def test_requires_instruction_and_payment(self) -> None:
+        assert not is_max_payments_per_instruction_question("Which user has the most payments?")
+
+
+class TestIsPaymentsForInstructionQuestion:
+    def test_detects_list_payments_question(self) -> None:
+        iid = "3bcb9b9a-9415-44ce-b707-4cc4c8281bb9"
+        assert is_payments_for_instruction_question(
+            f"Can you list the payments for instruction {iid}?"
+        )
+
+    def test_extracts_instruction_uuid(self) -> None:
+        iid = "3bcb9b9a-9415-44ce-b707-4cc4c8281bb9"
+        assert instruction_id_from_list_payments_question(
+            f"List payments for instruction {iid}"
+        ) == iid
+
+    def test_payment_status_filter(self) -> None:
+        assert payment_status_filter_from_question("List APPROVED payments") == "APPROVED"
+        assert payment_status_filter_from_question("List payments") is None
+
+
+class TestIsAlertRankingQuestion:
+    def test_detects_top_denial_user_question(self) -> None:
+        assert is_alert_ranking_question(
+            "Which user triggered the most policy denial alerts this week?",
+            mode="events",
+        )
+
+    def test_not_in_payments_mode(self) -> None:
+        assert not is_alert_ranking_question(
+            "Which user triggered the most policy denial alerts this week?",
+            mode="payments",
+        )
+
+    def test_ranking_period_label(self) -> None:
+        assert ranking_period_label("How many alerts today?") == "today"
+        assert ranking_period_label("Most alerts this week?") == "this week"
+        assert ranking_period_label("Most alerts ever?") == "all time"
 
 
 class TestRecordsToRows:
