@@ -31,7 +31,7 @@ instruction-service = "inst.main:run"
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-pythonpath = ["src", "../shared/platform_auth/src", "../shared/sequence_client/src", "../shared/authz_client/src"]
+pythonpath = [".", "src", "../shared/platform_auth/src", "../shared/sequence_client/src", "../shared/authz_client/src"]
 
 [tool.coverage.run]
 source = ["inst"]
