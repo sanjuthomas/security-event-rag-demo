@@ -49,6 +49,16 @@ _COUNT_QUESTION = re.compile(
     re.IGNORECASE,
 )
 
+_PAYMENT_TOTAL_AMOUNT = re.compile(
+    r"\b(total|sum)\b.*\b(amount|value)\b|\b(amount|value)\b.*\b(total|sum)\b",
+    re.IGNORECASE,
+)
+
+_LOB_FILTER = re.compile(
+    r"\b(?:lob\s+|for\s+|payments?\s+for\s+)?(FICC|FX|DESK)\b",
+    re.IGNORECASE,
+)
+
 _RANKING_QUESTION = re.compile(
     r"\b(most|top|highest|greatest|largest|biggest|who triggered|which user|which users)\b",
     re.IGNORECASE,
@@ -143,6 +153,38 @@ def is_count_question(question: str) -> bool:
     return bool(_COUNT_QUESTION.search(question))
 
 
+def is_payment_total_amount_question(question: str) -> bool:
+    if "payment" not in question.lower():
+        return False
+    return bool(_PAYMENT_TOTAL_AMOUNT.search(question))
+
+
+def is_payment_count_aggregate_question(question: str) -> bool:
+    if not is_count_question(question):
+        return False
+    if "payment" not in question.lower():
+        return False
+    if is_payments_for_instruction_question(question):
+        return False
+    if _LIST_PAYMENTS_FOR_INSTRUCTION.search(question):
+        return False
+    return True
+
+
+def lob_filter_from_question(question: str) -> str | None:
+    match = _LOB_FILTER.search(question)
+    return match.group(1).upper() if match else None
+
+
+def payment_aggregate_period_label(question: str) -> str:
+    flags = _question_flags(question)
+    if flags["today"]:
+        return "today"
+    if flags["week"]:
+        return "this week"
+    return "all time"
+
+
 def is_max_payments_per_instruction_question(question: str) -> bool:
     q = question.lower()
     return "instruction" in q and "payment" in q and bool(_MAX_PAYMENTS_PER_INSTRUCTION.search(question))
@@ -217,6 +259,64 @@ def _time_filter_cypher(flags: dict[str, bool]) -> str:
     if flags["week"]:
         return "AND date(datetime(e.timestamp)) >= date() - duration('P7D')"
     return ""
+
+
+def _payment_time_filter_cypher(flags: dict[str, bool]) -> str:
+    if flags["today"]:
+        return "AND date(datetime(p.updated_at)) = date()"
+    if flags["week"]:
+        return "AND date(datetime(p.updated_at)) >= date() - duration('P7D')"
+    return ""
+
+
+def _payment_status_filter_cypher(question: str) -> str:
+    status = payment_status_filter_from_question(question)
+    if status:
+        return f"AND p.status = '{status}'"
+    q = question.lower()
+    if "approv" in q and "reject" not in q:
+        return "AND p.status = 'APPROVED'"
+    if "reject" in q:
+        return "AND p.status = 'REJECTED'"
+    if "submit" in q:
+        return "AND p.status = 'SUBMITTED'"
+    return ""
+
+
+def _payment_aggregate_queries(
+    question: str,
+    flags: dict[str, bool],
+    *,
+    sum_amount: bool,
+) -> list[tuple[str, str]]:
+    lob = lob_filter_from_question(question)
+    lob_filter = f"AND p.owning_lob = '{lob}'" if lob else ""
+    status_filter = _payment_status_filter_cypher(question)
+    time_filter = _payment_time_filter_cypher(flags)
+
+    if sum_amount:
+        return [
+            (
+                "payment_total_amount",
+                f"""MATCH (p:Payment)
+WHERE true {status_filter} {lob_filter} {time_filter}
+RETURN coalesce(p.currency, 'USD') AS currency,
+       count(p) AS payment_count,
+       sum(p.amount) AS total_amount
+ORDER BY currency
+LIMIT 10""",
+            )
+        ]
+
+    return [
+        (
+            "payment_count",
+            f"""MATCH (p:Payment)
+WHERE true {status_filter} {lob_filter} {time_filter}
+RETURN count(p) AS total
+LIMIT 1""",
+        )
+    ]
 
 
 def _alert_ranking_queries(
@@ -476,6 +576,12 @@ def plan_graph_queries(question: str, *, mode: str) -> list[tuple[str, str]] | N
         if flags["instructions"]:
             return _alert_ranking_queries(time_filter=time_filter, instructions_only=True)
         return _alert_ranking_queries(time_filter=time_filter)
+
+    if mode in ("payments", "all") and is_payment_total_amount_question(question):
+        return _payment_aggregate_queries(question, flags, sum_amount=True)
+
+    if mode in ("payments", "all") and is_payment_count_aggregate_question(question):
+        return _payment_aggregate_queries(question, flags, sum_amount=False)
 
     if not flags["count"]:
         return None

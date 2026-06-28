@@ -6,6 +6,10 @@ from typing import Any
 import httpx
 
 from chat_application.config import settings
+from chat_application.formatting import (
+    format_eligible_approvers_section,
+    format_money_amount,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -94,38 +98,23 @@ class EligibilityClient:
 def format_eligible_approvers_answer(data: dict[str, Any]) -> str:
     payment_id = data.get("payment_id", "")
     status = data.get("payment_status", "")
-    amount = data.get("amount")
-    currency = data.get("currency", "")
+    amount_text = format_money_amount(data.get("amount"), data.get("currency", ""))
     owning_lob = data.get("owning_lob", "")
     instruction_status = data.get("instruction_status", "")
-    eligible = data.get("eligible") or []
 
     header = (
         f"Live OPA evaluation for payment {payment_id} "
-        f"({status}, {currency} {amount:,.2f}, desk {owning_lob}, "
-        f"instruction {instruction_status})."
+        f"({status}, {amount_text}, desk {owning_lob}, instruction {instruction_status})."
     )
 
-    if not eligible:
-        return (
-            f"{header}\n\n"
-            "No users currently satisfy APPROVE_PAYMENT policy for this payment."
-        )
-
-    lines = [header, "", "Users who can approve this payment:"]
-    for index, row in enumerate(eligible, start=1):
-        name = row.get("display_name") or row.get("user_id")
-        title = row.get("title") or ""
-        basis = row.get("allow_basis") or []
-        basis_text = f" — basis: {', '.join(basis)}" if basis else ""
-        lines.append(f"{index}. {name} ({title}){basis_text}")
-
-    evaluated = data.get("candidates_evaluated")
-    if evaluated is not None:
-        lines.append("")
-        lines.append(f"Evaluated {evaluated} FUNDING_APPROVER candidate(s) from the user directory.")
-
-    return "\n".join(lines)
+    return format_eligible_approvers_section(
+        header=header,
+        section_title="Users who can approve this payment:",
+        eligible=data.get("eligible") or [],
+        empty_message="No users currently satisfy APPROVE_PAYMENT policy for this payment.",
+        candidate_role_label="FUNDING_APPROVER",
+        candidates_evaluated=data.get("candidates_evaluated"),
+    )
 
 
 def format_instruction_eligible_approvers_answer(data: dict[str, Any]) -> str:
@@ -135,7 +124,6 @@ def format_instruction_eligible_approvers_answer(data: dict[str, Any]) -> str:
     owning_lob = data.get("owning_lob", "")
     created_by = data.get("created_by_user_id", "")
     creator_title = data.get("created_by_title", "")
-    eligible = data.get("eligible") or []
 
     header = (
         f"Live OPA evaluation for instruction {instruction_id} "
@@ -143,25 +131,11 @@ def format_instruction_eligible_approvers_answer(data: dict[str, Any]) -> str:
         f"created by {created_by} / {creator_title})."
     )
 
-    if not eligible:
-        return (
-            f"{header}\n\n"
-            "No users currently satisfy APPROVE policy for this instruction."
-        )
-
-    lines = [header, "", "Users who can approve this instruction:"]
-    for index, row in enumerate(eligible, start=1):
-        name = row.get("display_name") or row.get("user_id")
-        title = row.get("title") or ""
-        basis = row.get("allow_basis") or []
-        basis_text = f" — basis: {', '.join(basis)}" if basis else ""
-        lines.append(f"{index}. {name} ({title}){basis_text}")
-
-    evaluated = data.get("candidates_evaluated")
-    if evaluated is not None:
-        lines.append("")
-        lines.append(
-            f"Evaluated {evaluated} INSTRUCTION_APPROVER candidate(s) from the user directory."
-        )
-
-    return "\n".join(lines)
+    return format_eligible_approvers_section(
+        header=header,
+        section_title="Users who can approve this instruction:",
+        eligible=data.get("eligible") or [],
+        empty_message="No users currently satisfy APPROVE policy for this instruction.",
+        candidate_role_label="INSTRUCTION_APPROVER",
+        candidates_evaluated=data.get("candidates_evaluated"),
+    )

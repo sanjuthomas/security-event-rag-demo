@@ -1,16 +1,20 @@
 from __future__ import annotations
 
+from chat_application.formatting import (
+    format_usd_compact,
+    humanize_authorization_text,
+    humanize_policy_basis,
+    humanize_policy_basis_point,
+)
 from chat_application.rag import (
     RagService,
     _append_policy_basis,
     _display_from_snap_user,
     _format_alert_ranking_answer,
     _format_max_payments_per_instruction_answer,
+    _format_payment_count_aggregate_answer,
+    _format_payment_total_amount_answer,
     _format_payments_for_instruction_answer,
-    _format_usd_amount,
-    _humanize_authorization_text,
-    _humanize_policy_basis,
-    _humanize_policy_basis_point,
     _instruction_lifecycle_party_lines,
     _parse_authorization_basis,
 )
@@ -36,19 +40,19 @@ class TestParseAuthorizationBasis:
 
 class TestUsdAmountFormatting:
     def test_million(self) -> None:
-        assert _format_usd_amount(1_000_000) == "$1 million"
-        assert _format_usd_amount(5_000_000) == "$5 million"
+        assert format_usd_compact(1_000_000) == "$1 million"
+        assert format_usd_compact(5_000_000) == "$5 million"
 
     def test_billion(self) -> None:
-        assert _format_usd_amount(10_000_000_000) == "$10 billion"
+        assert format_usd_compact(10_000_000_000) == "$10 billion"
 
     def test_scientific_notation_input(self) -> None:
-        assert _format_usd_amount(float("1e+06")) == "$1 million"
-        assert _format_usd_amount(float("1e+07")) == "$10 million"
+        assert format_usd_compact(float("1e+06")) == "$1 million"
+        assert format_usd_compact(float("1e+07")) == "$10 million"
 
     def test_humanize_policy_basis_point(self) -> None:
         raw = "amount 1e+06 within subject and absolute limits"
-        assert _humanize_policy_basis_point(raw) == (
+        assert humanize_policy_basis_point(raw) == (
             "amount $1 million within subject and absolute limits"
         )
 
@@ -57,7 +61,7 @@ class TestUsdAmountFormatting:
             "amount 10000000.0 within subject and absolute limits",
             "role FUNDING_APPROVER",
         ]
-        readable = _humanize_policy_basis(basis)
+        readable = humanize_policy_basis(basis)
         assert readable[0] == "amount $10 million within subject and absolute limits"
         assert readable[1] == "role FUNDING_APPROVER"
 
@@ -66,7 +70,7 @@ class TestUsdAmountFormatting:
             "User was allowed because amount 1e+06 within subject and absolute limits; "
             "role FUNDING_APPROVER"
         )
-        assert "amount $1 million within subject and absolute limits" in _humanize_authorization_text(
+        assert "amount $1 million within subject and absolute limits" in humanize_authorization_text(
             summary
         )
 
@@ -206,6 +210,33 @@ class TestAlertRankingAnswer:
         assert "Total Alerts" in answer
         assert "Hassan, Amira (fx-201)" in answer
         assert "| 12" in answer or "| 12 " in answer
+
+
+class TestPaymentAggregateAnswers:
+    def test_formats_total_amount_from_graph_rows(self) -> None:
+        rows = [
+            {
+                "currency": "USD",
+                "payment_count": 18,
+                "total_amount": 125_000_000,
+            }
+        ]
+        answer = _format_payment_total_amount_answer(
+            "What is the total approved payment amount for FICC today?",
+            rows,
+        )
+        assert "LOB FICC" in answer
+        assert "today" in answer
+        assert "125,000,000.00 USD" in answer
+        assert "18 payments" in answer
+
+    def test_formats_count_from_graph_rows(self) -> None:
+        answer = _format_payment_count_aggregate_answer(
+            "How many payments were approved today for FICC?",
+            [{"total": 18}],
+        )
+        assert "18 matching payment(s)" in answer
+        assert "LOB FICC" in answer
 
 
 class TestDisplayFromSnapUser:

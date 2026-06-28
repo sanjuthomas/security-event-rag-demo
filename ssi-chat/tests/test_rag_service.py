@@ -272,6 +272,32 @@ class TestRagServiceAsk:
         mock_ollama.synthesize_answer.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_ask_payment_total_amount_ficc_today(
+        self, rag_service, mock_ollama, mock_qdrant, mock_neo4j
+    ) -> None:
+        mock_qdrant.search_vector = MagicMock(return_value=[])
+        mock_qdrant.search_bm25 = MagicMock(return_value=[])
+        mock_neo4j.run_cypher = AsyncMock(
+            return_value=[
+                {
+                    "currency": "USD",
+                    "payment_count": 18,
+                    "total_amount": 125_000_000,
+                }
+            ]
+        )
+
+        response = await rag_service.ask(
+            "What is the total approved payment amount for FICC today?",
+            [],
+            mode="payments",
+        )
+        assert "125,000,000.00 USD" in response.answer
+        assert "18 payments" in response.answer
+        assert "LOB FICC" in response.answer
+        mock_ollama.synthesize_answer.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_ask_alert_ranking(
         self, rag_service, mock_ollama, mock_qdrant, mock_neo4j
     ) -> None:

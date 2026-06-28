@@ -25,3 +25,4 @@ def test_format_instruction_eligible_approvers_answer_lists_users() -> None:
     assert "instruction inst-1" in text
     assert "Vasquez, Elena" in text
     assert "INSTRUCTION_APPROVER" in text
+    assert "| Approver" in text

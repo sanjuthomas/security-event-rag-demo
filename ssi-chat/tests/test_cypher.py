@@ -10,8 +10,11 @@ from chat_application.cypher import (
     is_alert_ranking_question,
     is_count_question,
     is_max_payments_per_instruction_question,
+    is_payment_count_aggregate_question,
+    is_payment_total_amount_question,
     is_payments_for_instruction_question,
     load_graph_schema,
+    lob_filter_from_question,
     normalize_read_only_cypher,
     payment_status_filter_from_question,
     plan_graph_queries,
@@ -185,6 +188,37 @@ class TestPlanGraphQueries:
         )
         assert planned is not None
         assert "p.status = 'APPROVED'" in planned[0][1]
+
+    def test_payment_total_amount_ficc_today(self) -> None:
+        planned = plan_graph_queries(
+            "What is the total approved payment amount for FICC today?",
+            mode="payments",
+        )
+        assert planned is not None
+        assert planned[0][0] == "payment_total_amount"
+        query = planned[0][1]
+        assert "p.status = 'APPROVED'" in query
+        assert "p.owning_lob = 'FICC'" in query
+        assert "sum(p.amount)" in query
+        assert "count(p)" in query
+        assert "date(datetime(p.updated_at)) = date()" in query
+
+    def test_payment_count_approved_ficc_today(self) -> None:
+        planned = plan_graph_queries(
+            "How many payments were approved today for FICC?",
+            mode="payments",
+        )
+        assert planned is not None
+        assert planned[0][0] == "payment_count"
+        query = planned[0][1]
+        assert "p.status = 'APPROVED'" in query
+        assert "p.owning_lob = 'FICC'" in query
+        assert "count(p) AS total" in query
+
+    def test_lob_filter_for_ficc_phrase(self) -> None:
+        assert lob_filter_from_question(
+            "What is the total approved payment amount for FICC today?"
+        ) == "FICC"
 
     def test_non_count_question_returns_none(self) -> None:
         assert plan_graph_queries("List recent events", mode="events") is None

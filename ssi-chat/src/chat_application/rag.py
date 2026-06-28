@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import re
 import time
 from typing import Any
 
@@ -20,15 +19,25 @@ from chat_application.cypher import (
     instruction_id_from_list_payments_question,
     is_alert_ranking_question,
     is_max_payments_per_instruction_question,
+    is_payment_count_aggregate_question,
+    is_payment_total_amount_question,
     is_payments_for_instruction_question,
     load_graph_schema,
+    lob_filter_from_question,
     normalize_read_only_cypher,
+    payment_aggregate_period_label,
     plan_graph_queries,
     ranking_period_label,
     validate_read_only_cypher,
 )
 from chat_application.eligibility import eligible_approver_target
-from chat_application.formatting import format_markdown_table
+from chat_application.formatting import (
+    format_markdown_table,
+    format_money_amount,
+    humanize_authorization_text,
+    humanize_policy_basis,
+)
+from chat_application.response_formatter import format_chat_response
 from chat_application.models import ChatMessage, ChatResponse, SearchMode, SourceHit
 from chat_application.neo4j import Neo4jClient
 from chat_application.ollama import OllamaClient
@@ -37,62 +46,11 @@ from chat_application.reranker import RankedHit, graph_rows_to_hits, rrf_merge
 
 logger = logging.getLogger(__name__)
 
-_AMOUNT_IN_BASIS = re.compile(
-    r"amount\s+([\d.eE+-]+)\s+(within subject and absolute limits)",
-    re.IGNORECASE,
-)
-
-
-def _format_usd_amount(amount: float) -> str:
-    """Format a USD amount for compliance-facing policy text."""
-    abs_amount = abs(amount)
-    if abs_amount >= 1_000_000_000:
-        value = abs_amount / 1_000_000_000
-        if value.is_integer():
-            return f"${int(value):,} billion"
-        trimmed = f"{value:.1f}".rstrip("0").rstrip(".")
-        return f"${trimmed} billion"
-    if abs_amount >= 1_000_000:
-        value = abs_amount / 1_000_000
-        if value.is_integer():
-            return f"${int(value):,} million"
-        trimmed = f"{value:.1f}".rstrip("0").rstrip(".")
-        return f"${trimmed} million"
-    if abs_amount >= 1_000:
-        return f"${abs_amount:,.0f}"
-    if abs_amount.is_integer():
-        return f"${int(abs_amount)}"
-    return f"${abs_amount:,.2f}"
-
-
-def _humanize_policy_basis_point(point: str) -> str:
-    def _replace(match: re.Match[str]) -> str:
-        try:
-            amount = float(match.group(1))
-        except ValueError:
-            return match.group(0)
-        return f"amount {_format_usd_amount(amount)} {match.group(2)}"
-
-    return _AMOUNT_IN_BASIS.sub(_replace, point)
-
-
-def _humanize_policy_basis(basis: list[str]) -> list[str]:
-    return [_humanize_policy_basis_point(point) for point in basis]
-
 
 def _format_basis_join(basis: list[str] | None) -> str:
     if not basis:
         return ""
-    return " | ".join(_humanize_policy_basis(basis))
-
-
-def _humanize_authorization_text(text: str) -> str:
-    if not text:
-        return text
-    return _AMOUNT_IN_BASIS.sub(
-        lambda match: _humanize_policy_basis_point(match.group(0)),
-        text,
-    )
+    return " | ".join(humanize_policy_basis(basis))
 
 
 def _parse_authorization_basis(value: Any) -> list[str]:
@@ -111,7 +69,7 @@ def _parse_authorization_basis(value: Any) -> list[str]:
 def _append_policy_basis(why: str, basis: list[str]) -> str:
     if not basis:
         return why
-    readable = _humanize_policy_basis(basis)
+    readable = humanize_policy_basis(basis)
     table_rows = [[index, point] for index, point in enumerate(readable, start=1)]
     table = format_markdown_table(["#", "Policy check"], table_rows)
     return f"{why.rstrip()}\n\nPolicy basis ({len(readable)} checks):\n\n{table}"
@@ -186,16 +144,7 @@ def _format_max_payments_per_instruction_answer(
 
 
 def _format_payment_amount_display(amount: Any, currency: Any) -> str:
-    if amount is None:
-        return "N/A"
-    try:
-        value = float(amount)
-    except (TypeError, ValueError):
-        return str(amount)
-    formatted = f"{value:,.2f}"
-    if currency:
-        return f"{formatted} {currency}"
-    return formatted
+    return format_money_amount(amount, currency, currency_first=False)
 
 
 def _format_payments_for_instruction_answer(
@@ -274,6 +223,52 @@ def _format_alert_ranking_answer(message: str, graph_rows: list[dict[str, Any]])
         f"{summary}\n\n"
         f"{format_markdown_table(['User', 'User ID', 'Total Alerts', 'Payment Alerts', 'Instruction Alerts'], table_rows)}"
     )
+
+
+def _payment_aggregate_scope_label(message: str) -> str:
+    lob = lob_filter_from_question(message)
+    return f"LOB {lob}" if lob else "all LOBs"
+
+
+def _format_payment_count_aggregate_answer(message: str, graph_rows: list[dict[str, Any]]) -> str:
+    total = graph_rows[0].get("total", 0) if graph_rows else 0
+    period = payment_aggregate_period_label(message)
+    scope = _payment_aggregate_scope_label(message)
+    return f"There are {total} matching payment(s) for {scope} ({period})."
+
+
+def _format_payment_total_amount_answer(message: str, graph_rows: list[dict[str, Any]]) -> str | None:
+    amount_rows = [
+        row
+        for row in graph_rows
+        if row.get("total_amount") is not None or row.get("payment_count") is not None
+    ]
+    if not amount_rows:
+        return "No matching payments were found in the graph."
+
+    period = payment_aggregate_period_label(message)
+    scope = _payment_aggregate_scope_label(message)
+    lines = [f"Approved payment totals for {scope} ({period}):"]
+
+    for row in amount_rows:
+        count = int(row.get("payment_count") or 0)
+        amount_text = _format_payment_amount_display(row.get("total_amount"), row.get("currency"))
+        if count == 0:
+            lines.append(f"- {amount_text}: no payments")
+        elif count == 1:
+            lines.append(f"- Total: {amount_text} across 1 payment.")
+        else:
+            lines.append(f"- Total: {amount_text} across {count} payments.")
+
+    return "\n".join(lines)
+
+
+def _should_format_payment_count_aggregate(message: str, mode: SearchMode) -> bool:
+    return mode in ("payments", "all") and is_payment_count_aggregate_question(message)
+
+
+def _should_format_payment_total_amount(message: str, mode: SearchMode) -> bool:
+    return mode in ("payments", "all") and is_payment_total_amount_question(message)
 
 
 def _should_lookup_payment_ids(message: str, uuids: list[str], mode: SearchMode) -> bool:
@@ -482,10 +477,15 @@ class RagService:
                 )
         if answer is None and is_alert_ranking_question(message, mode=mode):
             answer = _format_alert_ranking_answer(message, graph_result["rows"])
+        if answer is None and _should_format_payment_total_amount(message, mode):
+            answer = _format_payment_total_amount_answer(message, graph_result["rows"])
+        if answer is None and _should_format_payment_count_aggregate(message, mode):
+            answer = _format_payment_count_aggregate_answer(message, graph_result["rows"])
         if answer is None:
             answer = await self.ollama.synthesize_answer(
                 message, context, chat_history, mode=mode
             )
+        answer = format_chat_response(answer)
         generation_ms = (time.perf_counter() - gen_started) * 1000
 
         return ChatResponse(
@@ -755,8 +755,8 @@ class RagService:
 
         why = await self.ollama.summarize_authorization_why(
             approver=approver,
-            authorization_summary=_humanize_authorization_text(summary),
-            authorization_basis=_humanize_policy_basis(basis) if basis else None,
+            authorization_summary=humanize_authorization_text(summary),
+            authorization_basis=humanize_policy_basis(basis) if basis else None,
         )
         why = _append_policy_basis(why, basis)
 
@@ -831,10 +831,10 @@ class RagService:
             return None
 
         summary = summary or f"{approver} was allowed to APPROVE_PAYMENT"
-        readable_basis = _humanize_policy_basis(basis) if basis else None
+        readable_basis = humanize_policy_basis(basis) if basis else None
         why = await self.ollama.summarize_authorization_why(
             approver=approver,
-            authorization_summary=_humanize_authorization_text(summary),
+            authorization_summary=humanize_authorization_text(summary),
             authorization_basis=readable_basis,
         )
         why = _append_policy_basis(why, basis)
