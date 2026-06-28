@@ -5,6 +5,9 @@ FOR (i:Instruction) REQUIRE i.instruction_id IS UNIQUE;
 CREATE CONSTRAINT instruction_version_key_unique IF NOT EXISTS
 FOR (v:InstructionVersion) REQUIRE v.version_key IS UNIQUE;
 
+CREATE CONSTRAINT instruction_version_id_num_unique IF NOT EXISTS
+FOR (v:InstructionVersion) REQUIRE (v.instruction_id, v.version_number) IS UNIQUE;
+
 CREATE CONSTRAINT security_event_id_unique IF NOT EXISTS
 FOR (e:SecurityEvent) REQUIRE e.event_id IS UNIQUE;
 
@@ -52,8 +55,11 @@ CREATE INDEX instruction_version_end_date IF NOT EXISTS
 FOR (v:InstructionVersion) ON (v.end_date);
 
 // Payment constraints and indexes
-CREATE CONSTRAINT payment_id_unique IF NOT EXISTS
-FOR (p:Payment) REQUIRE p.payment_id IS UNIQUE;
+CREATE CONSTRAINT payment_id_version_unique IF NOT EXISTS
+FOR (p:Payment) REQUIRE (p.payment_id, p.version_number) IS UNIQUE;
+
+CREATE INDEX payment_version_key IF NOT EXISTS
+FOR (p:Payment) ON (p.version_key);
 
 CREATE INDEX payment_instruction_id IF NOT EXISTS
 FOR (p:Payment) ON (p.instruction_id);

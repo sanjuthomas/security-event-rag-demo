@@ -35,7 +35,14 @@ async def admin_login(request: LoginRequest) -> dict[str, str]:
     try:
         session = client.login(request.user_id, request.password)
     except Exception as exc:
-        raise HTTPException(status_code=401, detail=f"login failed: {exc}") from exc
+        detail = f"login failed: {exc}"
+        if "404" in str(exc) and "sessions" in str(exc):
+            detail = (
+                "login failed: Zitadel session API returned 404 — "
+                "check that zitadel-postgres and zitadel-api are healthy "
+                "(docker compose ps zitadel-postgres zitadel-api)"
+            )
+        raise HTTPException(status_code=401, detail=detail) from exc
     return {
         "user_id": session.user_id,
         "session_id": session.session_id,

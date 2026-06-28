@@ -23,6 +23,26 @@ def _roles_json(roles: list | None) -> str | None:
     return json.dumps(roles)
 
 
+def _instruction_version_key(instruction_id: str, version_number: int) -> str:
+    return f"{instruction_id}:{version_number}"
+
+
+def _payment_version_key(payment_id: str, version_number: int) -> str:
+    return f"{payment_id}:{version_number}"
+
+
+def _payment_version_number(payload: dict[str, Any]) -> int:
+    snap = payload.get("payment_snapshot") or {}
+    if snap.get("version_number") is not None:
+        return int(snap["version_number"])
+    if payload.get("version_number") is not None:
+        return int(payload["version_number"])
+    lifecycle = snap.get("lifecycle_events") or payload.get("lifecycle_events") or []
+    if lifecycle:
+        return len(lifecycle)
+    return 1
+
+
 class Neo4jGraphWriter:
     def __init__(self) -> None:
         self._driver: AsyncDriver | None = None
@@ -56,11 +76,100 @@ class Neo4jGraphWriter:
             for chunk in schema_path.read_text(encoding="utf-8").split(";")
             if chunk.strip() and not chunk.strip().startswith("//")
         ]
+        await self._repair_graph_duplicates()
         async with self._driver.session() as session:
             for statement in statements:
-                await session.run(statement)
+                try:
+                    await session.run(statement)
+                except Exception as exc:
+                    logger.warning("Neo4j schema statement failed: %s | %s", exc, statement[:120])
         self._schema_applied = True
         logger.info("applied %s Neo4j schema statement(s)", len(statements))
+
+    async def _repair_graph_duplicates(self) -> None:
+        """Normalize version keys and remove duplicate nodes before composite constraints."""
+        if self._driver is None:
+            return
+
+        repairs = [
+            """
+            MATCH (v:InstructionVersion)
+            WHERE v.version_key IS NULL
+              AND v.instruction_id IS NOT NULL
+              AND v.version_number IS NOT NULL
+            MATCH (keeper:InstructionVersion {
+                instruction_id: v.instruction_id,
+                version_number: v.version_number
+            })
+            WHERE keeper.version_key IS NOT NULL AND keeper <> v
+            DETACH DELETE v
+            """,
+            """
+            MATCH (v:InstructionVersion)
+            WHERE v.instruction_id IS NOT NULL AND v.version_number IS NOT NULL
+            WITH v.instruction_id AS iid, v.version_number AS vn, collect(v) AS nodes
+            WHERE size(nodes) > 1
+            UNWIND nodes[1..] AS dup
+            DETACH DELETE dup
+            """,
+            """
+            MATCH (v:InstructionVersion)
+            WHERE v.version_key IS NULL
+              AND v.instruction_id IS NOT NULL
+              AND v.version_number IS NOT NULL
+            SET v.version_key = v.instruction_id + ':' + toString(v.version_number)
+            """,
+            """
+            MATCH (i:Instruction)
+            WITH i.instruction_id AS iid, collect(i) AS nodes
+            WHERE size(nodes) > 1
+            UNWIND nodes[1..] AS dup
+            DETACH DELETE dup
+            """,
+            """
+            MATCH (p:Payment) WHERE p.version_number IS NULL SET p.version_number = 1
+            """,
+            """
+            MATCH (p:Payment)
+            WHERE p.version_key IS NULL
+              AND p.payment_id IS NOT NULL
+              AND p.version_number IS NOT NULL
+            MATCH (keeper:Payment {
+                payment_id: p.payment_id,
+                version_number: p.version_number
+            })
+            WHERE keeper.version_key IS NOT NULL AND keeper <> p
+            DETACH DELETE p
+            """,
+            """
+            MATCH (p:Payment)
+            WHERE p.payment_id IS NOT NULL AND p.version_number IS NOT NULL
+            WITH p.payment_id AS pid, p.version_number AS vn, collect(p) AS nodes
+            WHERE size(nodes) > 1
+            UNWIND nodes[1..] AS dup
+            DETACH DELETE dup
+            """,
+            """
+            MATCH (p:Payment)
+            WHERE p.version_key IS NULL
+              AND p.payment_id IS NOT NULL
+              AND p.version_number IS NOT NULL
+            SET p.version_key = p.payment_id + ':' + toString(p.version_number)
+            """,
+            """
+            MATCH (p:Payment)
+            WITH p.payment_id AS pid, collect(p) AS nodes
+            WHERE size(nodes) > 1
+            UNWIND nodes[1..] AS dup
+            DETACH DELETE dup
+            """,
+        ]
+        async with self._driver.session() as session:
+            for query in repairs:
+                try:
+                    await session.run(query)
+                except Exception as exc:
+                    logger.warning("Neo4j graph repair step failed: %s", exc)
 
     async def upsert(self, document: EnrichedSecurityEventDocument) -> None:
         if self._driver is None:
@@ -79,12 +188,12 @@ class Neo4jGraphWriter:
 
         version_number = document.version_number or instruction.get("version_number")
         version_key = (
-            f"{document.instruction_id}:{version_number}"
+            _instruction_version_key(document.instruction_id, version_number)
             if document.instruction_id and version_number is not None
             else None
         )
         prev_version_key = (
-            f"{document.instruction_id}:{version_number - 1}"
+            _instruction_version_key(document.instruction_id, version_number - 1)
             if document.instruction_id and version_number and version_number > 1
             else None
         )
@@ -627,6 +736,7 @@ class Neo4jGraphWriter:
             return
 
         version_number = fact.get("version_number", 0)
+        version_key = _instruction_version_key(instruction_id, version_number)
         action = fact.get("action", "")
         timestamp = fact.get("timestamp")
 
@@ -664,12 +774,11 @@ class Neo4jGraphWriter:
               i.wire_scope       = $wire_scope,
               i.currency         = $currency
 
-        // ── InstructionVersion node ──────────────────────────────────────────────
-        MERGE (v:InstructionVersion {
-            instruction_id: $instruction_id,
-            version_number: $version_number
-        })
-        SET   v.status             = $status,
+        // ── InstructionVersion node (canonical key matches security-event ETL) ───
+        MERGE (v:InstructionVersion {version_key: $version_key})
+        SET   v.instruction_id     = $instruction_id,
+              v.version_number     = $version_number,
+              v.status             = $status,
               v.action             = $action,
               v.timestamp          = $timestamp,
               v.owning_lob         = $owning_lob,
@@ -788,6 +897,7 @@ class Neo4jGraphWriter:
 
         params: dict[str, Any] = {
             "instruction_id": instruction_id,
+            "version_key": version_key,
             "version_number": version_number,
             "action": action,
             "timestamp": timestamp,
@@ -892,6 +1002,8 @@ class Neo4jGraphWriter:
         payment_id = resource.get("id", "")
         instruction_id = resource.get("instruction_id", "")
         owning_lob = resource.get("owning_lob", "")
+        payment_version = _payment_version_number(event)
+        payment_version_key = _payment_version_key(payment_id, payment_version)
         auth_params = authorization_neo4j_params(event)
 
         async with self._driver.session() as session:
@@ -975,13 +1087,17 @@ class Neo4jGraphWriter:
                     await tx.run(
                         """
                         MERGE (p:Payment {payment_id: $payment_id})
-                        ON CREATE SET p.instruction_id = $instruction_id,
-                                      p.owning_lob     = $owning_lob
+                        SET p.version_number = $version_number,
+                            p.version_key    = $version_key,
+                            p.instruction_id = coalesce($instruction_id, p.instruction_id),
+                            p.owning_lob     = coalesce($owning_lob, p.owning_lob)
                         WITH p
                         MATCH (e:SecurityEvent {event_id: $event_id})
                         MERGE (e)-[:TARGETS_PAYMENT]->(p)
                         """,
                         payment_id=payment_id,
+                        version_number=payment_version,
+                        version_key=payment_version_key,
                         instruction_id=instruction_id,
                         owning_lob=owning_lob,
                         event_id=event_id,
@@ -1025,6 +1141,8 @@ class Neo4jGraphWriter:
         created_by = fact.get("created_by") or {}
         approved_by = fact.get("approved_by") or {}
         rejected_by = fact.get("rejected_by") or {}
+        payment_version = _payment_version_number(fact)
+        payment_version_key = _payment_version_key(payment_id, payment_version)
 
         async with self._driver.session() as session:
             tx = await session.begin_transaction()
@@ -1033,7 +1151,9 @@ class Neo4jGraphWriter:
                 await tx.run(
                     """
                     MERGE (p:Payment {payment_id: $payment_id})
-                    SET p.instruction_id   = $instruction_id,
+                    SET p.version_number   = $version_number,
+                        p.version_key      = $version_key,
+                        p.instruction_id   = $instruction_id,
                         p.status           = $status,
                         p.amount           = $amount,
                         p.currency         = $currency,
@@ -1047,6 +1167,8 @@ class Neo4jGraphWriter:
                         p.updated_at       = $updated_at
                     """,
                     payment_id=payment_id,
+                    version_number=payment_version,
+                    version_key=payment_version_key,
                     instruction_id=instruction_id,
                     status=fact.get("status"),
                     amount=fact.get("amount"),

@@ -274,8 +274,8 @@ services:
       QDRANT_COLLECTION: ssi_search_index
       QDRANT_BM25_MODEL: qdrant/bm25
       OIDC_ISSUER_URL: http://localhost:8080
-      OIDC_INTERNAL_URL: http://zitadel-proxy
-      ZITADEL_INTERNAL_URL: http://zitadel-proxy
+      OIDC_INTERNAL_URL: http://zitadel-api:8080
+      ZITADEL_INTERNAL_URL: http://zitadel-api:8080
       ZITADEL_SERVICE_PAT_FILE: /zitadel/bootstrap/login-client.pat
       AUTH_MODE: jwt
     extra_hosts:

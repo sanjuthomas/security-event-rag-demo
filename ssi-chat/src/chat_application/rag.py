@@ -18,10 +18,12 @@ from chat_application.cypher import (
     extract_uuids,
     instruction_id_from_list_payments_question,
     is_alert_ranking_question,
+    is_instruction_count_aggregate_question,
     is_max_payments_per_instruction_question,
     is_payment_count_aggregate_question,
     is_payment_total_amount_question,
     is_payments_for_instruction_question,
+    instruction_status_filter_from_question,
     load_graph_schema,
     lob_filter_from_question,
     normalize_read_only_cypher,
@@ -228,6 +230,45 @@ def _format_alert_ranking_answer(message: str, graph_rows: list[dict[str, Any]])
 def _payment_aggregate_scope_label(message: str) -> str:
     lob = lob_filter_from_question(message)
     return f"LOB {lob}" if lob else "all LOBs"
+
+
+def _format_instruction_count_aggregate_answer(
+    message: str, graph_rows: list[dict[str, Any]]
+) -> str:
+    if graph_rows and graph_rows[0].get("lob") is not None:
+        table_rows = [
+            (row.get("lob") or "unknown", int(row.get("total") or 0))
+            for row in graph_rows
+            if row.get("lob") is not None
+        ]
+        if not table_rows:
+            return "No instructions were found grouped by LOB."
+        return (
+            "Instruction counts by LOB:\n\n"
+            f"{format_markdown_table(['LOB', 'Instructions'], table_rows)}"
+        )
+
+    total = int(graph_rows[0].get("total") or 0) if graph_rows else 0
+    status = instruction_status_filter_from_question(message)
+    lob = lob_filter_from_question(message)
+    period = payment_aggregate_period_label(message)
+
+    qualifiers: list[str] = []
+    if status:
+        qualifiers.append(f"status {status}")
+    if lob:
+        qualifiers.append(f"LOB {lob}")
+    if period != "all time":
+        qualifiers.append(period)
+    qualifier = f" ({', '.join(qualifiers)})" if qualifiers else ""
+
+    if total == 1:
+        return f"There is 1 instruction in the store{qualifier}."
+    return f"There are {total} instructions in the store{qualifier}."
+
+
+def _should_format_instruction_count_aggregate(message: str, mode: SearchMode) -> bool:
+    return mode == "instructions" and is_instruction_count_aggregate_question(message)
 
 
 def _format_payment_count_aggregate_answer(message: str, graph_rows: list[dict[str, Any]]) -> str:
@@ -481,6 +522,8 @@ class RagService:
             answer = _format_payment_total_amount_answer(message, graph_result["rows"])
         if answer is None and _should_format_payment_count_aggregate(message, mode):
             answer = _format_payment_count_aggregate_answer(message, graph_result["rows"])
+        if answer is None and _should_format_instruction_count_aggregate(message, mode):
+            answer = _format_instruction_count_aggregate_answer(message, graph_result["rows"])
         if answer is None:
             answer = await self.ollama.synthesize_answer(
                 message, context, chat_history, mode=mode

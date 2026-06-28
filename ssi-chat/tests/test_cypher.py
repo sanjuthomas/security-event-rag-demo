@@ -215,6 +215,33 @@ class TestPlanGraphQueries:
         assert "p.owning_lob = 'FICC'" in query
         assert "count(p) AS total" in query
 
+    def test_instruction_count_in_store(self) -> None:
+        planned = plan_graph_queries(
+            "How many instructions are there in the store?",
+            mode="instructions",
+        )
+        assert planned is not None
+        assert planned[0][0] == "count"
+        assert "count(DISTINCT i.instruction_id)" in planned[0][1]
+        assert "[:CURRENT]->" in planned[0][1]
+
+    def test_instruction_count_pending_approval(self) -> None:
+        planned = plan_graph_queries(
+            "How many instructions are in PENDING_APPROVAL?",
+            mode="instructions",
+        )
+        assert planned is not None
+        assert "v.status = 'PENDING_APPROVAL'" in planned[0][1]
+
+    def test_instruction_count_per_lob(self) -> None:
+        planned = plan_graph_queries(
+            "How many instructions exist per LOB?",
+            mode="instructions",
+        )
+        assert planned is not None
+        assert planned[0][0] == "count_by_lob"
+        assert "count(DISTINCT i.instruction_id)" in planned[0][1]
+
     def test_lob_filter_for_ficc_phrase(self) -> None:
         assert lob_filter_from_question(
             "What is the total approved payment amount for FICC today?"

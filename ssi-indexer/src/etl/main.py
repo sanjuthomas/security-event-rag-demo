@@ -144,6 +144,37 @@ async def health() -> dict:
     return {"status": overall, "components": components}
 
 
+@api_router.get("/vector/chunk-stats")
+async def vector_chunk_stats(
+    limit: int = Query(default=10, ge=1, le=50),
+) -> dict:
+    """Largest indexed search_text payloads — one point per record, no semantic chunking."""
+    try:
+        stats_payload = await asyncio.to_thread(
+            qdrant_store.search_text_chunk_stats,
+            top_n=limit,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    stats_payload["indexing_notes"] = {
+        "chunking": "none — each Qdrant point is one security event, instruction state, or payment record",
+        "search_text": (
+            "flattened subset of salient fields (message, authorization, actors, "
+            "instruction/payment attributes) — not the full raw JSON document"
+        ),
+        "full_payload": "stored in the Qdrant payload alongside search_text for retrieval",
+        "sources": {
+            "instruction_security_event": "one point per instruction security event",
+            "instruction_state": "one point per instruction (updated in place on mutation)",
+            "payment_security_event": "one point per payment security event",
+            "payment_fact": "one point per payment (updated in place on mutation)",
+        },
+    }
+    stats_payload["embedding_context_tokens"] = 32_768
+    return stats_payload
+
+
 @api_router.get("/stats")
 async def stats() -> dict:
     components = await component_status(

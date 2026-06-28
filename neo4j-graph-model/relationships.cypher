@@ -24,7 +24,7 @@
 //
 // (:InstructionVersion)
 //   version_key             unique "{instruction_id}:{version_number}" (Community Edition)
-//   instruction_id
+//   instruction_id          + version_number also enforced as a composite unique constraint
 //   version_number
 //   status                  DRAFT | PENDING | STANDING | SINGLE_USE | SUSPENDED | REJECTED | USED | EXPIRED | DELETED
 //   action                  lifecycle action that produced this version (CREATE | SUBMIT | APPROVE | ...)
@@ -162,7 +162,9 @@
 // ---------------------------------------------------------------------------
 //
 // (:Payment)
-//   payment_id          unique UUID
+//   payment_id          unique business id (sequence id)
+//   version_number      monotonic lifecycle version (1 = create, increments per mutation)
+//   version_key         unique "{payment_id}:{version_number}" (Community Edition helper)
 //   instruction_id      backing SSI instruction
 //   status              PENDING | APPROVED | REJECTED
 //   amount              numeric payment amount

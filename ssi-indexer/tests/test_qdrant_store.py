@@ -178,6 +178,48 @@ def test_collection_info_not_exists(store: QdrantHybridStore):
     assert store.collection_info() == {"exists": False, "points_count": 0}
 
 
+def test_search_text_chunk_stats_empty_collection(store: QdrantHybridStore):
+    store._client.collection_exists.return_value = False
+    stats = store.search_text_chunk_stats(top_n=10)
+    assert stats["points_count"] == 0
+    assert stats["top_chunks"] == []
+    assert stats["indexing_model"] == "one_point_per_record"
+
+
+def test_search_text_chunk_stats_returns_top_chunks(store: QdrantHybridStore):
+    store._client.collection_exists.return_value = True
+
+    short = MagicMock()
+    short.id = "p-short"
+    short.payload = {
+        "source": "instruction_state",
+        "instruction_id": "i-small",
+        "search_text": "short text",
+    }
+
+    long_text = "word " * 200
+    long = MagicMock()
+    long.id = "p-long"
+    long.payload = {
+        "source": "instruction_security_event",
+        "event_id": "evt-big",
+        "instruction_id": "i-big",
+        "search_text": long_text,
+    }
+
+    store._client.scroll.side_effect = [
+        ([short, long], None),
+    ]
+
+    stats = store.search_text_chunk_stats(top_n=1)
+    assert stats["points_count"] == 2
+    assert len(stats["top_chunks"]) == 1
+    assert stats["top_chunks"][0]["event_id"] == "evt-big"
+    assert stats["top_chunks"][0]["char_count"] == len(long_text)
+    assert stats["summary"]["char_count"]["max"] == len(long_text)
+    assert stats["by_source"]["instruction_security_event"]["count"] == 1
+
+
 def test_patch_instruction_state_authorization(store: QdrantHybridStore):
     record = MagicMock()
     record.payload = {"search_text": "base", "approved_at": None}

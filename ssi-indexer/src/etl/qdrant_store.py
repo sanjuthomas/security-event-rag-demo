@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import statistics
 import uuid
 from typing import Any
 
@@ -11,6 +12,34 @@ from etl.config import settings
 from etl.enrichment import EnrichedSecurityEventDocument
 
 logger = logging.getLogger(__name__)
+
+# One Qdrant point per business record; search_text is a flattened field subset (not chunked).
+INDEXING_MODEL = "one_point_per_record"
+
+
+def _estimate_tokens(text: str) -> int:
+    if not text:
+        return 0
+    return max(1, round(len(text.split()) * 1.3))
+
+
+def _numeric_summary(values: list[int]) -> dict[str, int | float]:
+    if not values:
+        return {"min": 0, "max": 0, "avg": 0, "median": 0}
+    return {
+        "min": min(values),
+        "max": max(values),
+        "avg": round(sum(values) / len(values)),
+        "median": int(statistics.median(values)),
+    }
+
+
+def _chunk_record_id(payload: dict[str, Any]) -> str | None:
+    return (
+        payload.get("event_id")
+        or payload.get("payment_id")
+        or payload.get("instruction_id")
+    )
 
 
 class QdrantHybridStore:
@@ -74,6 +103,88 @@ class QdrantHybridStore:
             "exists": True,
             "points_count": info.points_count,
             "status": str(info.status),
+        }
+
+    def search_text_chunk_stats(self, *, top_n: int = 10) -> dict[str, Any]:
+        """Summarize indexed search_text sizes and return the largest points."""
+        if self._client is None:
+            raise RuntimeError("Qdrant client not connected")
+        if not self.has_collection():
+            return {
+                "collection": settings.qdrant_collection,
+                "indexing_model": INDEXING_MODEL,
+                "points_count": 0,
+                "search_text_field": "search_text",
+                "summary": {
+                    "char_count": _numeric_summary([]),
+                    "word_count": _numeric_summary([]),
+                    "estimated_tokens": _numeric_summary([]),
+                },
+                "by_source": {},
+                "top_chunks": [],
+            }
+
+        rows: list[dict[str, Any]] = []
+        offset: str | int | None = None
+        while True:
+            batch, offset = self._client.scroll(
+                collection_name=settings.qdrant_collection,
+                limit=100,
+                offset=offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+            for record in batch:
+                payload = dict(record.payload or {})
+                text = str(payload.get("search_text") or "")
+                char_count = len(text)
+                word_count = len(text.split())
+                rows.append(
+                    {
+                        "point_id": str(record.id),
+                        "source": payload.get("source") or "unknown",
+                        "event_id": payload.get("event_id"),
+                        "instruction_id": payload.get("instruction_id"),
+                        "payment_id": payload.get("payment_id"),
+                        "record_id": _chunk_record_id(payload),
+                        "char_count": char_count,
+                        "word_count": word_count,
+                        "estimated_tokens": _estimate_tokens(text),
+                        "preview": text[:240].replace("\n", " "),
+                    }
+                )
+            if offset is None:
+                break
+
+        char_counts = [row["char_count"] for row in rows]
+        word_counts = [row["word_count"] for row in rows]
+        token_counts = [row["estimated_tokens"] for row in rows]
+
+        by_source: dict[str, dict[str, int | float]] = {}
+        for source in {row["source"] for row in rows}:
+            source_chars = [row["char_count"] for row in rows if row["source"] == source]
+            by_source[source] = {
+                "count": len(source_chars),
+                "max_chars": max(source_chars) if source_chars else 0,
+                "avg_chars": round(sum(source_chars) / len(source_chars)) if source_chars else 0,
+            }
+
+        top_chunks = sorted(rows, key=lambda row: row["char_count"], reverse=True)[:top_n]
+        for index, row in enumerate(top_chunks, start=1):
+            row["rank"] = index
+
+        return {
+            "collection": settings.qdrant_collection,
+            "indexing_model": INDEXING_MODEL,
+            "points_count": len(rows),
+            "search_text_field": "search_text",
+            "summary": {
+                "char_count": _numeric_summary(char_counts),
+                "word_count": _numeric_summary(word_counts),
+                "estimated_tokens": _numeric_summary(token_counts),
+            },
+            "by_source": by_source,
+            "top_chunks": top_chunks,
         }
 
     def _point_to_result(self, point: models.ScoredPoint) -> dict:

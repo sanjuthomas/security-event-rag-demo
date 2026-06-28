@@ -171,6 +171,32 @@ def is_payment_count_aggregate_question(question: str) -> bool:
     return True
 
 
+def is_instruction_count_aggregate_question(question: str) -> bool:
+    if not is_count_question(question):
+        return False
+    q = question.lower()
+    if "payment" in q:
+        return False
+    if is_payments_for_instruction_question(question):
+        return False
+    return "instruction" in q
+
+
+def instruction_status_filter_from_question(question: str) -> str | None:
+    upper = question.upper()
+    for status in (
+        "PENDING_APPROVAL",
+        "STANDING",
+        "REJECTED",
+        "SUSPENDED",
+        "DELETED",
+        "DRAFT",
+    ):
+        if status in upper:
+            return status
+    return None
+
+
 def lob_filter_from_question(question: str) -> str | None:
     match = _LOB_FILTER.search(question)
     return match.group(1).upper() if match else None
@@ -511,6 +537,56 @@ LIMIT 1""",
     ]
 
 
+def _instruction_count_queries(
+    question: str, flags: dict[str, bool]
+) -> list[tuple[str, str]]:
+    """Count distinct instructions via CURRENT version (Mongo-aligned business key)."""
+    status = instruction_status_filter_from_question(question)
+    lob = lob_filter_from_question(question)
+    status_clause = f"AND v.status = '{status}'" if status else ""
+    lob_clause = f"AND v.owning_lob = '{lob}'" if lob else ""
+
+    time_clause = ""
+    if flags["today"]:
+        time_clause = "AND v.timestamp IS NOT NULL AND date(datetime(v.timestamp)) = date()"
+    elif flags["week"]:
+        time_clause = (
+            "AND v.timestamp IS NOT NULL "
+            "AND date(datetime(v.timestamp)) >= date() - duration('P7D')"
+        )
+
+    q = question.lower()
+    if "per lob" in q or "by lob" in q or "each lob" in q:
+        return [
+            (
+                "count_by_lob",
+                f"""MATCH (i:Instruction)-[:CURRENT]->(v:InstructionVersion)
+WHERE true {status_clause} {time_clause}
+RETURN v.owning_lob AS lob, count(DISTINCT i.instruction_id) AS total
+ORDER BY lob
+LIMIT 20""",
+            ),
+        ]
+
+    return [
+        (
+            "count",
+            f"""MATCH (i:Instruction)-[:CURRENT]->(v:InstructionVersion)
+WHERE true {status_clause} {lob_clause} {time_clause}
+RETURN count(DISTINCT i.instruction_id) AS total LIMIT 1""",
+        ),
+        (
+            "details",
+            f"""MATCH (i:Instruction)-[:CURRENT]->(v:InstructionVersion)
+WHERE true {status_clause} {lob_clause} {time_clause}
+RETURN v.instruction_id, v.status, v.owning_lob, v.currency, v.wire_scope,
+       v.version_number
+ORDER BY v.instruction_id
+LIMIT 200""",
+        ),
+    ]
+
+
 def _instruction_subordinate_approver_queries() -> list[tuple[str, str]]:
     """Instructions where approver-[:REPORTS_TO]->creator on the current version."""
     return [
@@ -582,6 +658,9 @@ def plan_graph_queries(question: str, *, mode: str) -> list[tuple[str, str]] | N
 
     if mode in ("payments", "all") and is_payment_count_aggregate_question(question):
         return _payment_aggregate_queries(question, flags, sum_amount=False)
+
+    if mode == "instructions" and is_instruction_count_aggregate_question(question):
+        return _instruction_count_queries(question, flags)
 
     if not flags["count"]:
         return None

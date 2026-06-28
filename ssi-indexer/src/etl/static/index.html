@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Security Event Search</title>
-    <link rel="stylesheet" href="/static/styles.css?v=6" />
+    <link rel="stylesheet" href="/static/styles.css?v=7" />
   </head>
   <body>
     <header class="topbar">
@@ -30,6 +30,45 @@
     <section class="components-bar" aria-label="Connected components">
       <div id="components-grid" class="components-grid">
         <div class="component-card status-connecting">Loading component status…</div>
+      </div>
+    </section>
+
+    <section class="panel chunk-stats-panel" aria-label="Vector index text size monitor">
+      <div class="chunk-stats-header">
+        <div>
+          <h2>Indexed text size monitor</h2>
+          <p class="panel-intro">
+            One Qdrant point per record — no semantic chunking. Each point embeds a flattened
+            <code>search_text</code> field (salient fields only, not the full JSON document).
+            Top 10 largest texts help you decide if chunking is needed before hitting the
+            embedding model limit (<span id="chunk-embed-limit">32K</span> tokens).
+          </p>
+        </div>
+        <button type="button" id="chunk-stats-refresh-btn" class="btn btn-ghost">Refresh</button>
+      </div>
+
+      <div id="chunk-stats-empty" class="empty-state muted">
+        Sign in to load chunk size stats from Qdrant.
+      </div>
+
+      <div id="chunk-stats-content" class="hidden">
+        <div id="chunk-stats-summary" class="chunk-stats-summary"></div>
+        <div class="chunk-stats-table-wrap">
+          <table class="chunk-stats-table" aria-label="Top 10 largest indexed texts">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Source</th>
+                <th>Record</th>
+                <th>Chars</th>
+                <th>Words</th>
+                <th>~Tokens</th>
+                <th>Preview</th>
+              </tr>
+            </thead>
+            <tbody id="chunk-stats-body"></tbody>
+          </table>
+        </div>
       </div>
     </section>
 
@@ -158,6 +197,6 @@
     </section>
 
     <script src="/static/admin-auth.js?v=1"></script>
-    <script src="/static/app.js?v=7"></script>
+    <script src="/static/app.js?v=8"></script>
   </body>
 </html>

@@ -320,9 +320,120 @@ function startComponentsPolling() {
     clearInterval(componentsTimer);
   }
   void refreshComponents();
+  void refreshChunkStats();
   componentsTimer = setInterval(() => {
     void refreshComponents();
+    void refreshChunkStats();
   }, 20000);
+}
+
+// ── Indexed text size monitor ─────────────────────────────────────────────
+
+const chunkStatsEmpty = document.getElementById("chunk-stats-empty");
+const chunkStatsContent = document.getElementById("chunk-stats-content");
+const chunkStatsSummary = document.getElementById("chunk-stats-summary");
+const chunkStatsBody = document.getElementById("chunk-stats-body");
+const chunkStatsRefreshBtn = document.getElementById("chunk-stats-refresh-btn");
+const chunkEmbedLimit = document.getElementById("chunk-embed-limit");
+
+function formatNumber(value) {
+  return Number(value ?? 0).toLocaleString();
+}
+
+function renderChunkStats(data) {
+  const summary = data.summary || {};
+  const chars = summary.char_count || {};
+  const words = summary.word_count || {};
+  const tokens = summary.estimated_tokens || {};
+  const maxTokens = tokens.max || 0;
+  const contextLimit = data.embedding_context_tokens || 32768;
+  const headroomPct = contextLimit
+    ? Math.round((maxTokens / contextLimit) * 1000) / 10
+    : 0;
+
+  chunkStatsSummary.innerHTML = `
+    <article class="chunk-stat-card">
+      <span class="chunk-stat-label">Points indexed</span>
+      <strong class="chunk-stat-value">${formatNumber(data.points_count)}</strong>
+      <span class="chunk-stat-detail mono">${escapeHtml(data.collection || "—")}</span>
+    </article>
+    <article class="chunk-stat-card">
+      <span class="chunk-stat-label">Largest text</span>
+      <strong class="chunk-stat-value">${formatNumber(chars.max)} chars</strong>
+      <span class="chunk-stat-detail">~${formatNumber(tokens.max)} tokens · ${headroomPct}% of ${formatNumber(contextLimit)} limit</span>
+    </article>
+    <article class="chunk-stat-card">
+      <span class="chunk-stat-label">Average text</span>
+      <strong class="chunk-stat-value">${formatNumber(chars.avg)} chars</strong>
+      <span class="chunk-stat-detail">${formatNumber(words.avg)} words avg · median ${formatNumber(chars.median)} chars</span>
+    </article>
+    <article class="chunk-stat-card">
+      <span class="chunk-stat-label">Indexing model</span>
+      <strong class="chunk-stat-value">No chunking</strong>
+      <span class="chunk-stat-detail">1 point = 1 record · embedded field = search_text subset</span>
+    </article>
+  `;
+
+  if (chunkEmbedLimit && contextLimit) {
+    chunkEmbedLimit.textContent = `${Math.round(contextLimit / 1000)}K`;
+  }
+
+  chunkStatsBody.innerHTML = "";
+  (data.top_chunks || []).forEach((row) => {
+    const tr = document.createElement("tr");
+    const recordId =
+      row.event_id || row.payment_id || row.instruction_id || row.record_id || row.point_id;
+    tr.innerHTML = `
+      <td class="mono">${row.rank ?? "—"}</td>
+      <td><span class="chunk-source-pill">${escapeHtml(row.source || "unknown")}</span></td>
+      <td class="mono chunk-record-id">${escapeHtml(recordId || "—")}</td>
+      <td class="mono">${formatNumber(row.char_count)}</td>
+      <td class="mono">${formatNumber(row.word_count)}</td>
+      <td class="mono">${formatNumber(row.estimated_tokens)}</td>
+      <td class="chunk-preview" title="${escapeHtml(row.preview || "")}">${escapeHtml(row.preview || "—")}</td>
+    `;
+    chunkStatsBody.appendChild(tr);
+  });
+
+  chunkStatsEmpty.classList.add("hidden");
+  chunkStatsContent.classList.remove("hidden");
+}
+
+async function refreshChunkStats() {
+  if (!AdminAuth.loadSession()) {
+    chunkStatsContent.classList.add("hidden");
+    chunkStatsEmpty.classList.remove("hidden");
+    chunkStatsEmpty.textContent = "Sign in to load chunk size stats from Qdrant.";
+    return;
+  }
+
+  chunkStatsRefreshBtn.disabled = true;
+  try {
+    const response = await apiFetch("/api/vector/chunk-stats?limit=10");
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(typeof data.detail === "string" ? data.detail : `HTTP ${response.status}`);
+    }
+    if (!data.points_count) {
+      chunkStatsContent.classList.add("hidden");
+      chunkStatsEmpty.classList.remove("hidden");
+      chunkStatsEmpty.textContent = "No indexed points yet — generate events via the test harness.";
+      return;
+    }
+    renderChunkStats(data);
+  } catch (error) {
+    chunkStatsContent.classList.add("hidden");
+    chunkStatsEmpty.classList.remove("hidden");
+    chunkStatsEmpty.textContent = `Chunk stats unavailable: ${error.message}`;
+  } finally {
+    chunkStatsRefreshBtn.disabled = false;
+  }
+}
+
+if (chunkStatsRefreshBtn) {
+  chunkStatsRefreshBtn.addEventListener("click", () => {
+    void refreshChunkStats();
+  });
 }
 
 AdminAuth.bindAdminAuthPanel({

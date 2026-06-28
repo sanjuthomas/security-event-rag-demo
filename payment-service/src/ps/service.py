@@ -414,6 +414,7 @@ class PaymentService:
                 timestamp=now.isoformat(),
             )
         )
+        payment.sync_version_number()
 
         await self.repo.update(payment)
 
@@ -486,6 +487,7 @@ class PaymentService:
                 timestamp=now.isoformat(),
             )
         )
+        payment.sync_version_number()
 
         await self.repo.update(payment)
 
@@ -555,6 +557,7 @@ class PaymentService:
                 details={"reason": request.reason},
             )
         )
+        payment.sync_version_number()
 
         await self.repo.update(payment)
 
@@ -632,6 +635,7 @@ class PaymentService:
                 details={"reason": reason},
             )
         )
+        payment.sync_version_number()
 
         await self.repo.update(payment)
 

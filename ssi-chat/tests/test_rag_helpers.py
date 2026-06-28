@@ -11,6 +11,7 @@ from chat_application.rag import (
     _append_policy_basis,
     _display_from_snap_user,
     _format_alert_ranking_answer,
+    _format_instruction_count_aggregate_answer,
     _format_max_payments_per_instruction_answer,
     _format_payment_count_aggregate_answer,
     _format_payment_total_amount_answer,
@@ -237,6 +238,13 @@ class TestPaymentAggregateAnswers:
         )
         assert "18 matching payment(s)" in answer
         assert "LOB FICC" in answer
+
+    def test_formats_instruction_count(self) -> None:
+        answer = _format_instruction_count_aggregate_answer(
+            "How many instructions are there in the store?",
+            [{"total": 10}],
+        )
+        assert answer == "There are 10 instructions in the store."
 
 
 class TestDisplayFromSnapUser:

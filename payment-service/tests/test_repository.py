@@ -87,7 +87,7 @@ async def test_list_with_filters(patched_db: AsyncMock, payment: Payment) -> Non
 async def test_ensure_indexes(patched_db: AsyncMock) -> None:
     repo = PaymentRepository()
     await repo.ensure_indexes()
-    assert patched_db.create_index.await_count == 4
+    assert patched_db.create_index.await_count == 5
 
 
 @pytest.fixture

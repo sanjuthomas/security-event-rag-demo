@@ -6,13 +6,28 @@ import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from etl.neo4j_client import Neo4jGraphWriter, _roles_json
+from etl.neo4j_client import (
+    Neo4jGraphWriter,
+    _instruction_version_key,
+    _payment_version_number,
+    _roles_json,
+)
 
 
 def test_roles_json():
     assert _roles_json(["a", "b"]) == json.dumps(["a", "b"])
     assert _roles_json(None) is None
     assert _roles_json([]) is None
+
+
+def test_instruction_version_key():
+    assert _instruction_version_key("20260628-FICC-I-1", 2) == "20260628-FICC-I-1:2"
+
+
+def test_payment_version_number_from_lifecycle():
+    assert _payment_version_number({"lifecycle_events": [{}, {}]}) == 2
+    assert _payment_version_number({"payment_snapshot": {"version_number": 3}}) == 3
+    assert _payment_version_number({}) == 1
 
 
 def _async_iter(records):
@@ -178,4 +193,5 @@ async def test_apply_schema_applies_statements(tmp_path):
         await writer._apply_schema()
 
     assert writer._schema_applied is True
-    assert session.run.await_count == 1
+    # 9 graph repair queries + 1 schema statement (comment-only chunk skipped)
+    assert session.run.await_count == 10

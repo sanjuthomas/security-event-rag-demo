@@ -111,6 +111,39 @@ def test_stats_endpoint(client):
     assert stats["components"]["kafka"]["ok"] is False
 
 
+def test_vector_chunk_stats(client):
+    test_client, _, _, mock_qdrant = client
+    mock_qdrant.search_text_chunk_stats.return_value = {
+        "collection": "ssi_search_index",
+        "indexing_model": "one_point_per_record",
+        "points_count": 2,
+        "search_text_field": "search_text",
+        "summary": {
+            "char_count": {"min": 10, "max": 100, "avg": 55, "median": 55},
+            "word_count": {"min": 2, "max": 20, "avg": 11, "median": 11},
+            "estimated_tokens": {"min": 3, "max": 26, "avg": 14, "median": 14},
+        },
+        "by_source": {"instruction_security_event": {"count": 2, "max_chars": 100, "avg_chars": 55}},
+        "top_chunks": [{"rank": 1, "char_count": 100, "source": "instruction_security_event"}],
+    }
+
+    response = test_client.get("/api/vector/chunk-stats?limit=10")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["points_count"] == 2
+    assert body["indexing_model"] == "one_point_per_record"
+    assert body["indexing_notes"]["chunking"].startswith("none")
+    assert body["embedding_context_tokens"] == 32768
+    assert len(body["top_chunks"]) == 1
+
+
+def test_vector_chunk_stats_error(client):
+    test_client, _, _, mock_qdrant = client
+    mock_qdrant.search_text_chunk_stats.side_effect = RuntimeError("qdrant down")
+    response = test_client.get("/api/vector/chunk-stats")
+    assert response.status_code == 503
+
+
 def test_search_vector(client):
     test_client, _, mock_ollama, mock_qdrant = client
     mock_ollama.embed = AsyncMock(return_value=[0.1, 0.2])

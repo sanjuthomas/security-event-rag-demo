@@ -77,6 +77,27 @@ def test_payment_create_sets_lifecycle_event(subject: Subject) -> None:
     assert len(payment.lifecycle_events) == 1
     assert payment.lifecycle_events[0].action == "CREATE_PAYMENT"
     assert payment.lifecycle_events[0].event_id == "evt-99"
+    assert payment.version_number == 1
+
+
+def test_payment_sync_version_number(subject: Subject) -> None:
+    payment = Payment.create(
+        payment_id="20260715-EMEA-P-1",
+        instruction_id="instr-1",
+        instruction_version=1,
+        amount=100.0,
+        currency="EUR",
+        value_date="2026-07-15",
+        owning_lob="EMEA",
+        instruction_type="STANDING",
+        subject=subject,
+        event_id="evt-1",
+    )
+    payment.sync_version_number()
+    assert payment.version_number == 1
+    payment.lifecycle_events.append(payment.lifecycle_events[0].model_copy())
+    payment.sync_version_number()
+    assert payment.version_number == 2
 
 
 def test_payment_to_opa_payment(payment: Payment) -> None:

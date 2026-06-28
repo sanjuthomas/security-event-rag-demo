@@ -50,6 +50,11 @@ class PaymentRepository:
 
     async def ensure_indexes(self) -> None:
         await self._col.create_index("payment_id", unique=True)
+        await self._col.create_index(
+            [("payment_id", 1), ("version_number", 1)],
+            unique=True,
+            name="payment_id_version_unique",
+        )
         await self._col.create_index("instruction_id")
         await self._col.create_index("status")
         await self._col.create_index([("created_at", -1)])
