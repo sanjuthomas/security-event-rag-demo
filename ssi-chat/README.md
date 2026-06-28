@@ -64,7 +64,7 @@ WHEN: 2026-06-27T02:48:09.697763
 WHY: Elena Vasquez was authorized to approve because her Vice President title satisfies the approval matrix for Analyst work in FICC, her LOB matched the instruction, and there was no reporting relationship between approver and creator. The instruction met duration, role, and valid-transition requirements.
 ```
 
-Requires indexed `authorization_summary` on instruction state or APPROVE security events. Run harness **`repair-authorization`** after upgrading from an older demo dataset.
+Requires indexed `authorization_summary` on instruction state or APPROVE security events (populated automatically on new lifecycle actions).
 
 ## Example questions
 

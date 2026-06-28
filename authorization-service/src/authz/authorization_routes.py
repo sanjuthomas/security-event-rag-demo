@@ -2,7 +2,11 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 
 from authz.evaluate_dependencies import get_service_caller, resolve_evaluate_subject
 from authz.models import (
+    InstructionEligibleApproversEvaluateRequest,
+    InstructionEligibleApproversResponse,
     InstructionEvaluateRequest,
+    PaymentEligibleApproversEvaluateRequest,
+    PaymentEligibleApproversResponse,
     PaymentEvaluateRequest,
     PolicyDecisionResponse,
     Subject,
@@ -10,6 +14,14 @@ from authz.models import (
 from authz.opa import OpaClient
 
 router = APIRouter(prefix="/authorization", tags=["authorization"])
+
+
+def _eligibility_service():
+    from authz.main import eligibility_service
+
+    if eligibility_service is None:
+        raise HTTPException(status_code=503, detail="eligibility service not ready")
+    return eligibility_service
 
 
 def _opa_client() -> OpaClient:
@@ -62,6 +74,30 @@ async def evaluate_instruction(
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"opa evaluation failed: {exc}") from exc
     return _to_response(decision)
+
+
+@router.post("/payments/eligible-approvers", response_model=PaymentEligibleApproversResponse)
+async def evaluate_payment_eligible_approvers(
+    request: PaymentEligibleApproversEvaluateRequest,
+    _service_caller: Subject = Depends(get_service_caller),
+    service=Depends(_eligibility_service),
+) -> PaymentEligibleApproversResponse:
+    try:
+        return await service.eligible_approvers_for_payment(request)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"eligibility evaluation failed: {exc}") from exc
+
+
+@router.post("/instructions/eligible-approvers", response_model=InstructionEligibleApproversResponse)
+async def evaluate_instruction_eligible_approvers(
+    request: InstructionEligibleApproversEvaluateRequest,
+    _service_caller: Subject = Depends(get_service_caller),
+    service=Depends(_eligibility_service),
+) -> InstructionEligibleApproversResponse:
+    try:
+        return await service.eligible_approvers_for_instruction(request)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"eligibility evaluation failed: {exc}") from exc
 
 
 @router.post("/payments/evaluate", response_model=PolicyDecisionResponse)

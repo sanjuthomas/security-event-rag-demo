@@ -26,12 +26,6 @@ Seed data, wait for ETL, then run all cases:
 PYTHONPATH=. python -m regression.runner --seed --report regression-report.json
 ```
 
-If testing **Who/When/Why approval audit** on data from an older stack, run authorization backfill first:
-
-```bash
-curl -X POST http://localhost:8091/api/actions/repair-authorization
-```
-
 After install:
 
 ```bash
@@ -95,7 +89,7 @@ RUN_API_SMOKE=1 pytest tests/test_api_smoke.py -v
 | **payment-service** | UI list (admin), REST auth gate; lifecycle via harness seed |
 | **ssi-indexer** | Stats, vector search, graph events, cypher run/generate, auth gates |
 | **ssi-chat** | Compliance login, `/api/chat` (~60 YAML cases), compliance-users |
-| **authorization-service** | Payment/instruction eligible-approvers (compliance JWT), auth gate |
+| **payment-service** / **instruction-service** | Payment/instruction eligible-approvers (compliance JWT), auth gate |
 
 Chat cases exercise RAG end-to-end; they do not call ILM/payment REST APIs directly. Indexer and authz are covered by API smoke, not chat YAML.
 

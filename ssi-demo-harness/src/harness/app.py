@@ -130,7 +130,6 @@ _COUNT_ACTIONS: dict[str, Callable[..., object]] = {
 _SCENARIO_ACTIONS: dict[str, Callable[..., object]] = {
     "run-policy-scenario": actions.run_policy_scenario,
     "run-payment-policy-scenario": actions.run_payment_policy_scenario,
-    "repair-authorization": actions.repair_authorization,
 }
 
 
@@ -189,7 +188,6 @@ app.post("/api/actions/submit-payments")(_count_route("submit-payments"))
 app.post("/api/actions/approve-payments")(_count_route("approve-payments"))
 app.post("/api/actions/reject-payments")(_count_route("reject-payments"))
 app.post("/api/actions/run-policy-scenario")(_scenario_route("run-policy-scenario"))
-app.post("/api/actions/repair-authorization")(_scenario_route("repair-authorization"))
 app.post("/api/actions/run-payment-policy-scenario")(
     _scenario_route("run-payment-policy-scenario")
 )

@@ -184,3 +184,22 @@ class InstructionResponse(BaseModel):
     suspended_at: str | None = None
     last_used_at: str | None = None
     usage_count: int
+
+
+class EligibleApproverResponse(BaseModel):
+    user_id: str
+    display_name: str
+    title: str
+    allow_basis: list[str] = Field(default_factory=list)
+
+
+class InstructionEligibleApproversResponse(BaseModel):
+    instruction_id: str
+    instruction_status: str
+    instruction_type: str
+    owning_lob: str
+    created_by_user_id: str
+    created_by_title: str
+    evaluated_at: str
+    eligible: list[EligibleApproverResponse]
+    candidates_evaluated: int

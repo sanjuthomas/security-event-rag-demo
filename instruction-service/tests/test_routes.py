@@ -1,11 +1,10 @@
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from inst.dependencies import get_subject
-from inst.maintenance_routes import router as maintenance_router
 from inst.models.api import InstructionResponse, Subject
 from inst.routes import get_service, router
 from inst.service import InstructionService
@@ -43,7 +42,6 @@ def mock_service() -> MagicMock:
 def api_client(sample_subject: Subject, mock_service: MagicMock) -> TestClient:
     app = FastAPI()
     app.include_router(router, prefix="/api/v1")
-    app.include_router(maintenance_router, prefix="/api/v1")
     app.dependency_overrides[get_subject] = lambda: sample_subject
     app.dependency_overrides[get_service] = lambda: mock_service
     return TestClient(app)
@@ -109,27 +107,3 @@ def test_submit_invalid_state(api_client: TestClient, mock_service: MagicMock) -
     mock_service.submit.side_effect = InvalidStateTransitionError("bad state")
     response = api_client.post("/api/v1/instructions/i1/submit")
     assert response.status_code == 409
-
-
-@pytest.mark.asyncio
-async def test_repair_authorization_endpoint(mock_service: MagicMock) -> None:
-    from inst.admin import get_admin_subject
-
-    admin = Subject(
-        user_id="admin-001",
-        title="Platform Administrator",
-        roles=["PLATFORM_ADMIN"],
-        groups=["ADMIN"],
-    )
-    app = FastAPI()
-    app.include_router(maintenance_router, prefix="/api/v1")
-    app.dependency_overrides[get_admin_subject] = lambda: admin
-
-    with patch("inst.maintenance_routes.SecurityEventRepository") as mock_repo_cls:
-        mock_repo = MagicMock()
-        mock_repo.find_missing_authorization = AsyncMock(return_value=[])
-        mock_repo_cls.return_value = mock_repo
-        client = TestClient(app)
-        response = client.post("/api/v1/maintenance/repair-authorization")
-        assert response.status_code == 200
-        assert response.json()["scanned"] == 0

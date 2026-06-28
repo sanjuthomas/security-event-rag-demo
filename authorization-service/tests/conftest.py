@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -27,22 +27,16 @@ def test_client(users_file, monkeypatch):
     monkeypatch.setattr("authz.config.settings.users_file", users_file)
     monkeypatch.setattr("authz.config.settings.oidc_issuer_url", "http://localhost:8080")
 
-    repo = MagicMock()
-    repo.connect = AsyncMock()
-    repo.close = AsyncMock()
+    from authz import main as main_module
 
-    with patch("authz.main.PaymentRepository", return_value=repo):
-        with patch("authz.main.service_identity.login", new_callable=AsyncMock):
-            from authz import main as main_module
+    admin_subject = Subject(
+        user_id="admin-001",
+        title="Platform Admin",
+        roles=["PLATFORM_ADMIN"],
+    )
+    main_module.app.dependency_overrides[get_admin_subject] = lambda: admin_subject
 
-            admin_subject = Subject(
-                user_id="admin-001",
-                title="Platform Admin",
-                roles=["PLATFORM_ADMIN"],
-            )
-            main_module.app.dependency_overrides[get_admin_subject] = lambda: admin_subject
+    with TestClient(main_module.app) as client:
+        yield client
 
-            with TestClient(main_module.app) as client:
-                yield client
-
-            main_module.app.dependency_overrides.clear()
+    main_module.app.dependency_overrides.clear()

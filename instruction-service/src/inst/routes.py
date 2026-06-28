@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
-from inst.dependencies import get_subject
+from inst.dependencies import get_compliance_subject, get_subject
 from inst.models.api import (
     CreateInstructionRequest,
+    InstructionEligibleApproversResponse,
     InstructionResponse,
     RejectInstructionRequest,
     Subject,
@@ -107,6 +108,19 @@ async def get_instruction(
         raise HTTPException(status_code=404, detail="instruction not found") from exc
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+
+@router.post("/{instruction_id}/eligible-approvers", response_model=InstructionEligibleApproversResponse)
+async def instruction_eligible_approvers(
+    instruction_id: str,
+    _subject: Subject = Depends(get_compliance_subject),
+    service: InstructionService = Depends(get_service),
+) -> InstructionEligibleApproversResponse:
+    try:
+        data = await service.eligible_approvers(instruction_id)
+        return InstructionEligibleApproversResponse.model_validate(data)
+    except InstructionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="instruction not found") from exc
 
 
 @router.post("/{instruction_id}/submit", response_model=InstructionResponse)

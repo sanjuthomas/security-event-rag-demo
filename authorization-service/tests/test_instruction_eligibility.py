@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from authz.eligibility import EligibilityService
+from authz.models import InstructionEligibleApproversEvaluateRequest
 from authz.user_directory import UserDirectory
 
 
@@ -35,21 +36,6 @@ users:
         encoding="utf-8",
     )
 
-    ilm = AsyncMock()
-    ilm.get_instruction.return_value = {
-        "status": "PENDING",
-        "instruction_type": "STANDING",
-        "owning_lob": "FICC",
-        "effective_date": datetime.now(UTC).isoformat(),
-        "end_date": datetime.now(UTC).isoformat(),
-        "created_by": {
-            "user_id": "ficc-101",
-            "title": "Analyst",
-            "supervisor_id": "ficc-201",
-        },
-        "funding_account": {"owning_lob": "FICC"},
-    }
-
     opa = AsyncMock()
     opa.can_approve_instruction.side_effect = [
         (True, ["approval matrix"]),
@@ -57,13 +43,28 @@ users:
     ]
 
     service = EligibilityService(
-        payments=AsyncMock(),
         users=UserDirectory(users_yaml),
-        ilm=ilm,
         opa=opa,
     )
 
-    result = await service.eligible_approvers_for_instruction("inst-1")
+    result = await service.eligible_approvers_for_instruction(
+        InstructionEligibleApproversEvaluateRequest(
+            instruction={
+                "instruction_id": "inst-1",
+                "status": "PENDING",
+                "instruction_type": "STANDING",
+                "owning_lob": "FICC",
+                "effective_date": datetime.now(UTC).isoformat(),
+                "end_date": datetime.now(UTC).isoformat(),
+                "created_by": {
+                    "user_id": "ficc-101",
+                    "title": "Analyst",
+                    "supervisor_id": "ficc-201",
+                },
+                "funding_account": {"owning_lob": "FICC"},
+            }
+        )
+    )
 
     assert result.instruction_id == "inst-1"
     assert len(result.eligible) == 1

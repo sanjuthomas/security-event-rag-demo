@@ -32,32 +32,6 @@ class SecurityEventRepository:
     async def publish(self, document: dict[str, Any]) -> None:
         await kafka_publisher.publish(document)
 
-    async def replace_document(self, document: dict[str, Any]) -> None:
-        event_id = document.get("event_id")
-        if not event_id:
-            raise ValueError("security event document missing event_id")
-        payload = dict(document)
-        payload.pop("_id", None)
-        await self.collection.replace_one({"event_id": event_id}, payload)
-        await self.publish(payload)
-
-    async def find_missing_authorization(
-        self,
-        *,
-        limit: int = 500,
-    ) -> list[dict[str, Any]]:
-        cursor = self.collection.find(
-            {
-                "event.outcome": "success",
-                "$or": [
-                    {"details.authorization": {"$exists": False}},
-                    {"details.authorization": None},
-                ],
-            },
-            limit=limit,
-        )
-        return [doc async for doc in cursor]
-
     async def insert(self, event: SecurityEvent) -> SecurityEvent:
         document = event.model_dump(mode="json")
         await self.insert_document(document)

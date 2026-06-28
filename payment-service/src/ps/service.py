@@ -597,6 +597,28 @@ class PaymentService:
         )
         return [payment for payment in payments if _can_view_payment(subject, payment)]
 
+    async def eligible_approvers(self, payment_id: str) -> dict:
+        payment = await self._get_or_404(payment_id)
+        instruction = await self.ilm.get_instruction_as_service(payment.instruction_id)
+        await service_identity.ensure_logged_in()
+        return await self.authz.eligible_payment_approvers(
+            payment={
+                "payment_id": payment.payment_id,
+                "instruction_id": payment.instruction_id,
+                "instruction_version": payment.instruction_version,
+                "status": payment.status.value,
+                "amount": payment.amount,
+                "currency": payment.currency,
+                "owning_lob": payment.owning_lob,
+                "created_by_user_id": payment.created_by.user_id,
+                "created_by_supervisor_id": payment.created_by.supervisor_id,
+            },
+            instruction_status=str(instruction.get("status") or ""),
+            instruction_end_date=str(instruction.get("end_date") or ""),
+            service_token=service_identity.token,
+            service_session_id=service_identity.session_id,
+        )
+
     # ── Internal helpers ──────────────────────────────────────────────────────
 
     async def _cancel(self, payment: Payment, subject: Subject, reason: str) -> Payment:

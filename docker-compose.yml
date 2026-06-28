@@ -388,14 +388,8 @@ services:
     environment:
       <<: *otel-environment
       OTEL_SERVICE_NAME: authorization-service
-      MONGODB_URI: mongodb://mongodb:27017/?replicaSet=rs0
-      MONGODB_DATABASE: ssi_cash_activities
-      MONGODB_COLLECTION: payments
       OPA_URL: http://opa:8181
-      ILM_URL: http://instruction-service:8000
       USERS_FILE: /app/zitadel-seed/users.yaml
-      SERVICE_USER_ID: svc-payment
-      SERVICE_USER_PASSWORD: Password1!
       OIDC_ISSUER_URL: http://localhost:8080
       OIDC_INTERNAL_URL: http://zitadel-proxy
       ZITADEL_INTERNAL_URL: http://zitadel-proxy
@@ -406,14 +400,8 @@ services:
       - ./zitadel-seed:/app/zitadel-seed:ro
       - ./authorization-service/src/authz/static:/usr/local/lib/python3.12/site-packages/authz/static:ro
     depends_on:
-      mongodb:
-        condition: service_healthy
-      mongo-init:
-        condition: service_completed_successfully
       opa-policy-seed:
         condition: service_completed_successfully
-      instruction-service:
-        condition: service_started
       zitadel-api:
         condition: service_healthy
     restart: unless-stopped
@@ -461,7 +449,8 @@ services:
       OLLAMA_URL: http://host.docker.internal:11434
       OLLAMA_EMBEDDING_MODEL: bge-m3:latest
       OLLAMA_CHAT_MODEL: qwen3:30b
-      AUTHORIZATION_SERVICE_URL: http://authorization-service:8094
+      PAYMENT_SERVICE_URL: http://payment-service:8093
+      INSTRUCTION_SERVICE_URL: http://instruction-service:8000
       USERS_FILE: /app/zitadel-seed/users.yaml
       ZITADEL_URL: http://zitadel-proxy
       ZITADEL_HOST_HEADER: localhost
@@ -480,7 +469,9 @@ services:
         condition: service_started
       neo4j:
         condition: service_healthy
-      authorization-service:
+      payment-service:
+        condition: service_started
+      instruction-service:
         condition: service_started
       zitadel-api:
         condition: service_healthy

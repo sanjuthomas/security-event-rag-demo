@@ -15,7 +15,6 @@ from inst.auth_routes import router as auth_router
 from inst.config import settings
 from inst.database import close, connect
 from inst.kafka_publisher import kafka_publisher
-from inst.maintenance_routes import router as maintenance_router
 from inst.routes import router
 from inst.security_ui_routes import (
     SECURITY_EVENTS_STATIC_DIR,
@@ -56,7 +55,6 @@ app = FastAPI(
 
 app.include_router(auth_router)
 app.include_router(router, prefix=settings.api_prefix)
-app.include_router(maintenance_router, prefix=settings.api_prefix)
 app.include_router(ui_router)
 app.include_router(security_ui_router)
 app.mount("/ui/static", StaticFiles(directory=UI_STATIC_DIR), name="ui-static")

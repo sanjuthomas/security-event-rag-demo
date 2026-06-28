@@ -11,16 +11,8 @@ class Settings(BaseSettings):
     port: int = 8094
     api_prefix: str = "/api/v1"
 
-    mongodb_uri: str = "mongodb://localhost:27017/?replicaSet=rs0"
-    mongodb_database: str = "ssi_cash_activities"
-    mongodb_collection: str = "payments"
-
     opa_url: str = "http://localhost:8181"
-    ilm_url: str = "http://localhost:8000"
     users_file: Path = Path("/app/zitadel-seed/users.yaml")
-
-    service_user_id: str = "svc-payment"
-    service_user_password: str = "Password1!"
 
     oidc_issuer_url: str | None = None
     oidc_internal_url: str | None = None

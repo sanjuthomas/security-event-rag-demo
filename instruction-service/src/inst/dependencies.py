@@ -1,9 +1,10 @@
-from fastapi import Header, HTTPException
+from fastapi import Depends, Header, HTTPException
 
 from inst.auth import subject_from_bearer_token, subject_from_obo_call
 from inst.config import settings
 from inst.models.api import Subject
 from inst.models.enums import is_valid_owning_lob
+from platform_auth import is_platform_admin
 
 
 def _subject_from_headers(
@@ -97,3 +98,14 @@ def get_subject(
         )
 
     raise HTTPException(status_code=401, detail="unsupported authorization mode")
+
+
+def get_compliance_subject(subject: Subject = Depends(get_subject)) -> Subject:
+    if is_platform_admin(subject):
+        return subject
+    if not settings.compliance_role_set.intersection(subject.roles):
+        raise HTTPException(
+            status_code=403,
+            detail="COMPLIANCE_ANALYST role required for policy inquiry",
+        )
+    return subject

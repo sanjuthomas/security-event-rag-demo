@@ -12,7 +12,7 @@ Includes:
 - **Profit center approvers** — FICC, FX, DESK_RATES (`ficc-201`, `fx-300`, …)
 - **Front office** — payment submitters per desk (`fo-ficc-101`, `fo-fx-101`, `fo-rates-101`)
 - **Payment creators / approvers** — middle office payment staff (`pay-101` … `pay-400`) with amount-limit clubs and `covering_lobs`
-- **Service accounts** — `etl-reader` (ILM reads, excluded from VIEW events), `svc-payment` (payment service → ILM reads)
+- **Service accounts** — `etl-reader` (ILM reads, excluded from VIEW events), `svc-instruction` (instruction service → authz), `svc-payment` (payment service → authz and ILM)
 
 Default password: **`Password1!`** (see `defaults.password` in `users.yaml`).
 

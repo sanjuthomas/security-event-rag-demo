@@ -77,3 +77,23 @@ class PaymentResponse(BaseModel):
     created_at: str
     updated_at: str
     lifecycle_events: list[LifecycleEvent] = Field(default_factory=list)
+
+
+class EligibleApproverResponse(BaseModel):
+    user_id: str
+    display_name: str
+    title: str
+    allow_basis: list[str] = Field(default_factory=list)
+
+
+class PaymentEligibleApproversResponse(BaseModel):
+    payment_id: str
+    instruction_id: str
+    payment_status: str
+    amount: float
+    currency: str
+    owning_lob: str
+    instruction_status: str
+    evaluated_at: str
+    eligible: list[EligibleApproverResponse]
+    candidates_evaluated: int

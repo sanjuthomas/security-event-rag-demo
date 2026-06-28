@@ -8,8 +8,8 @@ import time
 from typing import Any
 
 from chat_application.authorization_client import (
-    AuthorizationClient,
-    AuthorizationClientError,
+    EligibilityClient,
+    EligibilityClientError,
     format_eligible_approvers_answer,
     format_instruction_eligible_approvers_answer,
 )
@@ -333,7 +333,7 @@ class RagService:
         self.qdrant = qdrant
         self.neo4j = neo4j
         self._schema = load_graph_schema()
-        self._authorization = AuthorizationClient()
+        self._eligibility = EligibilityClient()
 
     async def ask(
         self,
@@ -666,12 +666,12 @@ class RagService:
             )
 
         try:
-            data = await self._authorization.eligible_approvers_for_payment(
+            data = await self._eligibility.eligible_approvers_for_payment(
                 payment_ids[0],
                 bearer_token=bearer_token,
                 session_id=session_id,
             )
-        except AuthorizationClientError as exc:
+        except EligibilityClientError as exc:
             return str(exc)
 
         return format_eligible_approvers_answer(data)
@@ -698,12 +698,12 @@ class RagService:
             )
 
         try:
-            data = await self._authorization.eligible_approvers_for_instruction(
+            data = await self._eligibility.eligible_approvers_for_instruction(
                 instruction_ids[0],
                 bearer_token=bearer_token,
                 session_id=session_id,
             )
-        except AuthorizationClientError as exc:
+        except EligibilityClientError as exc:
             return str(exc)
 
         return format_instruction_eligible_approvers_answer(data)

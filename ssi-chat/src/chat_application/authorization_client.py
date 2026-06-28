@@ -10,13 +10,21 @@ from chat_application.config import settings
 logger = logging.getLogger(__name__)
 
 
-class AuthorizationClientError(Exception):
+class EligibilityClientError(Exception):
     pass
 
 
-class AuthorizationClient:
-    def __init__(self, base_url: str | None = None) -> None:
-        self._base = (base_url or settings.authorization_service_url).rstrip("/")
+class EligibilityClient:
+    def __init__(
+        self,
+        *,
+        payment_service_url: str | None = None,
+        instruction_service_url: str | None = None,
+    ) -> None:
+        self._payment_base = (payment_service_url or settings.payment_service_url).rstrip("/")
+        self._instruction_base = (
+            instruction_service_url or settings.instruction_service_url
+        ).rstrip("/")
 
     async def eligible_approvers_for_payment(
         self,
@@ -25,7 +33,7 @@ class AuthorizationClient:
         bearer_token: str,
         session_id: str | None = None,
     ) -> dict[str, Any]:
-        url = f"{self._base}/api/v1/payments/{payment_id}/eligible-approvers"
+        url = f"{self._payment_base}/api/v1/payments/{payment_id}/eligible-approvers"
         headers = {
             "Authorization": f"Bearer {bearer_token}",
             "Accept": "application/json",
@@ -37,18 +45,17 @@ class AuthorizationClient:
             response = await client.post(url, headers=headers)
 
         if response.status_code == 401:
-            raise AuthorizationClientError("authentication required — log in as a compliance analyst")
+            raise EligibilityClientError("authentication required — log in as a compliance analyst")
         if response.status_code == 403:
-            raise AuthorizationClientError("COMPLIANCE_ANALYST role required for this question")
+            raise EligibilityClientError("COMPLIANCE_ANALYST role required for this question")
         if response.status_code == 404:
             detail = response.json().get("detail", response.text)
-            raise AuthorizationClientError(str(detail))
+            raise EligibilityClientError(str(detail))
         if not response.is_success:
             detail = response.json().get("detail", response.text)
-            raise AuthorizationClientError(f"authorization service error: {detail}")
+            raise EligibilityClientError(f"payment service error: {detail}")
 
-        body: dict[str, Any] = response.json()
-        return body
+        return response.json()
 
     async def eligible_approvers_for_instruction(
         self,
@@ -57,7 +64,9 @@ class AuthorizationClient:
         bearer_token: str,
         session_id: str | None = None,
     ) -> dict[str, Any]:
-        url = f"{self._base}/api/v1/instructions/{instruction_id}/eligible-approvers"
+        url = (
+            f"{self._instruction_base}/api/v1/instructions/{instruction_id}/eligible-approvers"
+        )
         headers = {
             "Authorization": f"Bearer {bearer_token}",
             "Accept": "application/json",
@@ -69,18 +78,17 @@ class AuthorizationClient:
             response = await client.post(url, headers=headers)
 
         if response.status_code == 401:
-            raise AuthorizationClientError("authentication required — log in as a compliance analyst")
+            raise EligibilityClientError("authentication required — log in as a compliance analyst")
         if response.status_code == 403:
-            raise AuthorizationClientError("COMPLIANCE_ANALYST role required for this question")
+            raise EligibilityClientError("COMPLIANCE_ANALYST role required for this question")
         if response.status_code == 404:
             detail = response.json().get("detail", response.text)
-            raise AuthorizationClientError(str(detail))
+            raise EligibilityClientError(str(detail))
         if not response.is_success:
             detail = response.json().get("detail", response.text)
-            raise AuthorizationClientError(f"authorization service error: {detail}")
+            raise EligibilityClientError(f"instruction service error: {detail}")
 
-        body: dict[str, Any] = response.json()
-        return body
+        return response.json()
 
 
 def format_eligible_approvers_answer(data: dict[str, Any]) -> str:

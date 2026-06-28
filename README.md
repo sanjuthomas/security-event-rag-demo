@@ -338,12 +338,12 @@ Embedding throughput with `bge-m3` is approximately **80–120 documents/second*
 
 | Directory | Role |
 |-----------|------|
-| `instruction-service` | FastAPI lifecycle API — OPA authorization with `details.authorization` audit block, Mongo persistence, Kafka publishing, maintenance backfill APIs |
+| `instruction-service` | FastAPI lifecycle API — OPA authorization with `details.authorization` audit block, Mongo persistence, Kafka publishing |
 | `payment-service` | Cash payment lifecycle against approved SSI instructions — OPA authorization (amount limits, LOB coverage, segregation of duties), Mongo persistence, Kafka publishing, payment and security event UIs |
 | `ssi-indexer` | Four Kafka consumers — instruction + payment security events and state facts → Neo4j graph writer + Qdrant hybrid indexer (`ssi_search_index`) + search console UI |
-| `ssi-chat` | RAG chat — four search modes, triple retrieval, Who/When/Why approval audit (deterministic facts + LLM WHY rewrite), planned Cypher, regression suite; compliance sign-in for live **who can approve this payment?** via authorization-service |
-| `authorization-service` | Policy intelligence API — user directory UI, batch OPA `APPROVE_PAYMENT` evaluation; `COMPLIANCE_ANALYST` role required for eligibility API |
-| `ssi-demo-harness` | ZITADEL-authenticated UI to drive lifecycles, OPA policy scenarios, authorization backfill (`repair-authorization`) |
+| `ssi-chat` | RAG chat — four search modes, triple retrieval, Who/When/Why approval audit (deterministic facts + LLM WHY rewrite), planned Cypher, regression suite; compliance sign-in for live **who can approve?** via payment-service and instruction-service |
+| `authorization-service` | OPA policy evaluation and user directory UI — no database; domain services route eligibility and lifecycle checks here |
+| `ssi-demo-harness` | ZITADEL-authenticated UI to drive lifecycles and OPA policy scenarios |
 | `neo4j-graph-model` | Graph schema docs, Cypher constraints/indexes, example queries |
 | `opa-policy-seed` | Rego policies — `instruction/` + `payment/` packages with `allow_basis`, `violations`, lifecycle rules |
 | `zitadel-seed` | Demo user seed (`users.yaml`) — middle office, FICC/FX/DESK approvers, payment creators/approvers, front-office submitters, compliance analysts (`comp-001`, `comp-002`), service accounts |
@@ -424,10 +424,7 @@ cd zitadel-seed && ZITADEL_PAT="$PAT" python3 seed.py
 # 4. Open the test harness — run instruction and payment policy scenarios
 open http://localhost:8091
 
-# 5. (Optional) Backfill OPA authorization on events created before the audit-trail fix
-curl -X POST http://localhost:8091/api/actions/repair-authorization
-
-# 6. Open the chat and start asking questions (try Security Events mode first)
+# 5. Open the chat and start asking questions (try Security Events mode first)
 open http://localhost:8092
 ```
 
@@ -463,7 +460,8 @@ All passwords are `Password1!`. Login names follow `{user_id}@ssi.local`.
 | `fo-ficc-101` | Alex Morrison | Analyst — front-office submitter | FICC |
 | `fo-fx-101` | Jordan Blake | Analyst — front-office submitter | FX |
 | `etl-reader` | — | Service account — excluded from security event emission (`SECURITY_EVENT_EXCLUDED_USER_IDS`) | — |
-| `svc-payment` | — | Service account — payment service → ILM reads (`INSTRUCTION_VIEWER`) | — |
+| `svc-instruction` | — | Service account — instruction service → authorization-service (OBO) | — |
+| `svc-payment` | — | Service account — payment service → authorization-service and ILM (OBO) | — |
 | `admin-001` | Platform Administrator | **Platform admin** — secured UIs (harness, browsers, ETL console, user directory) and **ssi-chat** | — |
 | `comp-001` / `comp-002` | Compliance analysts | **ssi-chat** and live OPA eligibility questions | — |
 
@@ -699,18 +697,7 @@ The ETL denormalizes these onto Qdrant (`authorization_summary`, `authorization_
 
 **Chat behaviour (live policy — who can approve this payment?):**
 
-Compliance analysts sign in at http://localhost:8092 (`comp-001` / `comp-002`, password `Password1!`). Questions like _"Who can approve payment &lt;payment-id&gt;?"_ bypass RAG and call **authorization-service** (`POST /api/v1/payments/{id}/eligible-approvers`), which loads the payment from Mongo, fetches instruction status from ILM, and batch-evaluates `APPROVE_PAYMENT` in OPA over `FUNDING_APPROVER` candidates from `users.yaml`.
-
-**Backfill for data created before the audit-trail fix:**
-
-```bash
-# Repairs missing authorization on historical events and re-indexes APPROVE facts
-curl -X POST http://localhost:8091/api/actions/repair-authorization
-
-# Or call ILM directly:
-curl -X POST "http://localhost:8000/api/v1/maintenance/repair-authorization?limit=500"
-curl -X POST "http://localhost:8000/api/v1/maintenance/republish-approve-events?limit=500"
-```
+Compliance analysts sign in at http://localhost:8092 (`comp-001` / `comp-002`, password `Password1!`). Questions like _"Who can approve payment &lt;payment-id&gt;?"_ bypass RAG and call **payment-service** (`POST /api/v1/payments/{id}/eligible-approvers`), which loads the payment, fetches backing instruction context from instruction-service, and delegates OPA batch evaluation to authorization-service. Instruction eligibility questions call **instruction-service** (`POST /api/v1/instructions/{id}/eligible-approvers`) the same way.
 
 ---
 

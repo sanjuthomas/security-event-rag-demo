@@ -166,19 +166,19 @@ def run_api_smoke(
             chat_auth_gate,
         )
 
-        def authz_requires_auth() -> None:
+        def payment_eligible_requires_auth() -> None:
             response = client.post(
-                f"{authz_url.rstrip('/')}/api/v1/payments/pay-smoke/eligible-approvers",
+                f"{payment_url.rstrip('/')}/api/v1/payments/pay-smoke/eligible-approvers",
             )
             if response.status_code != 401:
                 raise RuntimeError(f"expected 401 without auth, got {response.status_code}")
 
         _run_check(
             result,
-            "authz_auth_gate",
-            "authorization-service",
+            "payment_eligible_auth_gate",
+            "payment-service",
             "POST eligible-approvers rejects unauthenticated",
-            authz_requires_auth,
+            payment_eligible_requires_auth,
         )
 
         def harness_status() -> None:
@@ -448,12 +448,12 @@ def run_api_smoke(
             indexer_cypher_generate,
         )
 
-        def authz_payment_eligible() -> None:
+        def payment_eligible() -> None:
             payment_id = context.get("submitted_payment_id") or context.get("approved_payment_id")
             if not payment_id:
                 raise SkipCheck("no payment_id in context (run with --seed first)")
             response = client.post(
-                f"{authz_url.rstrip('/')}/api/v1/payments/{payment_id}/eligible-approvers",
+                f"{payment_url.rstrip('/')}/api/v1/payments/{payment_id}/eligible-approvers",
                 headers=compliance_headers,
             )
             if response.status_code not in {200, 404}:
@@ -465,18 +465,18 @@ def run_api_smoke(
 
         _run_check(
             result,
-            "authz_payment_eligible",
-            "authorization-service",
+            "payment_eligible",
+            "payment-service",
             "POST /api/v1/payments/{id}/eligible-approvers (compliance)",
-            authz_payment_eligible,
+            payment_eligible,
         )
 
-        def authz_instruction_eligible() -> None:
+        def instruction_eligible() -> None:
             instruction_id = context.get("approved_instruction_id")
             if not instruction_id:
                 raise SkipCheck("no approved_instruction_id in context (run with --seed first)")
             response = client.post(
-                f"{authz_url.rstrip('/')}/api/v1/instructions/{instruction_id}/eligible-approvers",
+                f"{ilm_url.rstrip('/')}/api/v1/instructions/{instruction_id}/eligible-approvers",
                 headers=compliance_headers,
             )
             if response.status_code not in {200, 404}:
@@ -488,10 +488,10 @@ def run_api_smoke(
 
         _run_check(
             result,
-            "authz_instruction_eligible",
-            "authorization-service",
+            "instruction_eligible",
+            "instruction-service",
             "POST /api/v1/instructions/{id}/eligible-approvers (compliance)",
-            authz_instruction_eligible,
+            instruction_eligible,
         )
 
     return result

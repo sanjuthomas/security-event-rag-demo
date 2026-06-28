@@ -2,15 +2,18 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from authz.ilm_client import IlmClient, InstructionNotFoundError
 from authz.instruction_opa import build_instruction_opa_context
 from authz.models import (
     EligibleApprover,
+    InstructionEligibleApproversEvaluateRequest,
     InstructionEligibleApproversResponse,
+    PaymentEligibilityContext,
+    PaymentEligibleApproversEvaluateRequest,
     PaymentEligibleApproversResponse,
+    PaymentRecord,
+    UserReference,
 )
 from authz.opa import OpaClient
-from authz.payment_repository import PaymentNotFoundError, PaymentRepository
 from authz.user_directory import UserDirectory
 
 
@@ -18,29 +21,35 @@ class EligibilityService:
     def __init__(
         self,
         *,
-        payments: PaymentRepository,
         users: UserDirectory,
-        ilm: IlmClient,
         opa: OpaClient,
     ) -> None:
-        self._payments = payments
         self._users = users
-        self._ilm = ilm
         self._opa = opa
 
-    async def eligible_approvers_for_payment(self, payment_id: str) -> PaymentEligibleApproversResponse:
-        try:
-            payment = await self._payments.get_payment(payment_id)
-        except PaymentNotFoundError as exc:
-            raise exc
+    @staticmethod
+    def _payment_record(context: PaymentEligibilityContext) -> PaymentRecord:
+        return PaymentRecord(
+            payment_id=context.payment_id,
+            instruction_id=context.instruction_id,
+            instruction_version=context.instruction_version,
+            status=context.status,
+            amount=context.amount,
+            currency=context.currency,
+            owning_lob=context.owning_lob,
+            created_by=UserReference(
+                user_id=context.created_by_user_id,
+                supervisor_id=context.created_by_supervisor_id,
+            ),
+        )
 
-        try:
-            instruction = await self._ilm.get_instruction(payment.instruction_id)
-        except InstructionNotFoundError as exc:
-            raise exc
-
-        instruction_status = str(instruction.get("status") or "")
-        instruction_end_date = str(instruction.get("end_date") or "")
+    async def eligible_approvers_for_payment(
+        self,
+        request: PaymentEligibleApproversEvaluateRequest,
+    ) -> PaymentEligibleApproversResponse:
+        payment = self._payment_record(request.payment)
+        instruction_status = request.instruction_status
+        instruction_end_date = request.instruction_end_date
 
         candidates = self._users.funding_approver_candidates(payment.owning_lob)
         eligible: list[EligibleApprover] = []
@@ -78,17 +87,15 @@ class EligibilityService:
         )
 
     async def eligible_approvers_for_instruction(
-        self, instruction_id: str
+        self,
+        request: InstructionEligibleApproversEvaluateRequest,
     ) -> InstructionEligibleApproversResponse:
-        try:
-            instruction = await self._ilm.get_instruction(instruction_id)
-        except InstructionNotFoundError as exc:
-            raise exc
-
+        instruction = request.instruction
         instruction_status = str(instruction.get("status") or "")
         instruction_type = str(instruction.get("instruction_type") or "")
         owning_lob = str(instruction.get("owning_lob") or "")
         created_by = instruction.get("created_by") or {}
+        instruction_id = str(instruction.get("instruction_id") or "")
         opa_instruction, opa_account = build_instruction_opa_context(instruction)
 
         candidates = self._users.instruction_approver_candidates(owning_lob)

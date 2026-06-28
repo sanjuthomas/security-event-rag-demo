@@ -180,8 +180,8 @@ users:
 
   # ═══════════════════════════════════════════════════════════════════════════
   # Payment service account
-  # Used for service-to-service calls from payment-service → ILM (OBO pattern).
-  # Holds only INSTRUCTION_VIEWER so it can read instructions but cannot mutate them.
+  # Used for OBO calls from payment-service → authorization-service and ILM.
+  # INSTRUCTION_MARKER is required for marking instructions USED during payment create.
   # ═══════════════════════════════════════════════════════════════════════════
 
   - user_id: svc-payment
@@ -385,9 +385,9 @@ users:
       - ADMIN
 
   # ═══════════════════════════════════════════════════════════════════════════
-  # COMPLIANCE — policy inquiry users for chat / authorization-service
+  # COMPLIANCE — policy inquiry users for chat eligibility questions
   #
-  # COMPLIANCE_ANALYST may call authorization-service to ask who can approve
+  # COMPLIANCE_ANALYST may call payment-service / instruction-service to ask who can approve
   # a payment (live OPA evaluation). No payment or instruction mutation rights.
   # ═══════════════════════════════════════════════════════════════════════════
 

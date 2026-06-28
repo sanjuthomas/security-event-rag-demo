@@ -48,8 +48,8 @@ async def test_answer_payment_eligible_approvers_calls_authorization_client(
     rag_service: RagService,
 ) -> None:
     payment_id = "11111111-1111-1111-1111-111111111111"
-    rag_service._authorization = AsyncMock()
-    rag_service._authorization.eligible_approvers_for_payment.return_value = {
+    rag_service._eligibility = AsyncMock()
+    rag_service._eligibility.eligible_approvers_for_payment.return_value = {
         "payment_id": payment_id,
         "payment_status": "SUBMITTED",
         "amount": 1_000_000,
@@ -68,14 +68,14 @@ async def test_answer_payment_eligible_approvers_calls_authorization_client(
 
     assert answer is not None
     assert payment_id in answer
-    rag_service._authorization.eligible_approvers_for_payment.assert_awaited_once()
+    rag_service._eligibility.eligible_approvers_for_payment.assert_awaited_once()
 
 
 @pytest.mark.asyncio
 async def test_ask_short_circuits_eligibility_question(rag_service: RagService) -> None:
     payment_id = "22222222-2222-2222-2222-222222222222"
-    rag_service._authorization = AsyncMock()
-    rag_service._authorization.eligible_approvers_for_payment.return_value = {
+    rag_service._eligibility = AsyncMock()
+    rag_service._eligibility.eligible_approvers_for_payment.return_value = {
         "payment_id": payment_id,
         "payment_status": "SUBMITTED",
         "amount": 500_000,
@@ -110,8 +110,8 @@ async def test_answer_instruction_eligible_approvers_calls_authorization_client(
     rag_service: RagService,
 ) -> None:
     instruction_id = "11111111-1111-1111-1111-111111111111"
-    rag_service._authorization = AsyncMock()
-    rag_service._authorization.eligible_approvers_for_instruction.return_value = {
+    rag_service._eligibility = AsyncMock()
+    rag_service._eligibility.eligible_approvers_for_instruction.return_value = {
         "instruction_id": instruction_id,
         "instruction_status": "PENDING",
         "instruction_type": "STANDING",
@@ -137,7 +137,7 @@ async def test_answer_instruction_eligible_approvers_calls_authorization_client(
 
     assert answer is not None
     assert "Vasquez, Elena" in answer
-    rag_service._authorization.eligible_approvers_for_instruction.assert_awaited_once()
+    rag_service._eligibility.eligible_approvers_for_instruction.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -145,8 +145,8 @@ async def test_ask_short_circuits_instruction_eligibility_question(
     rag_service: RagService,
 ) -> None:
     instruction_id = "22222222-2222-2222-2222-222222222222"
-    rag_service._authorization = AsyncMock()
-    rag_service._authorization.eligible_approvers_for_instruction.return_value = {
+    rag_service._eligibility = AsyncMock()
+    rag_service._eligibility.eligible_approvers_for_instruction.return_value = {
         "instruction_id": instruction_id,
         "instruction_status": "PENDING",
         "instruction_type": "STANDING",

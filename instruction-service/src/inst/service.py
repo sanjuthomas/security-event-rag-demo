@@ -553,6 +553,16 @@ class InstructionService:
             visible.append(_to_response(record))
         return visible
 
+    async def eligible_approvers(self, instruction_id: str) -> dict:
+        record = await self.repository.get_current(instruction_id)
+        instruction = record.instruction.model_dump(mode="json")
+        await service_identity.ensure_logged_in()
+        return await self.authz.eligible_instruction_approvers(
+            instruction=instruction,
+            service_token=service_identity.token,
+            service_session_id=service_identity.session_id,
+        )
+
     async def submit(
         self,
         instruction_id: str,

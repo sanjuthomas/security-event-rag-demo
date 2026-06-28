@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     zitadel_service_pat: str | None = None
     zitadel_service_pat_file: Path | None = None
     auth_mode: str = "auto"
+    compliance_roles: str = "COMPLIANCE_ANALYST,COMPLIANCE_OFFICER,PLATFORM_ADMIN"
 
     kafka_enabled: bool = True
     kafka_bootstrap_servers: str = "kafka:9092"
@@ -37,6 +38,10 @@ class Settings(BaseSettings):
     kafka_security_events_topic: str = "payment-security-events"
 
     ui_initial_security_event_limit: int = 200
+
+    @property
+    def compliance_role_set(self) -> set[str]:
+        return {role.strip() for role in self.compliance_roles.split(",") if role.strip()}
 
     @model_validator(mode="after")
     def load_service_pat_from_file(self) -> "Settings":

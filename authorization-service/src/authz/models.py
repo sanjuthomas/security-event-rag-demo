@@ -188,3 +188,25 @@ class PaymentEvaluateRequest(BaseModel):
     instruction_end_date: str = ""
     instruction_status: str = ""
     subject: Subject | None = None
+
+
+class PaymentEligibilityContext(BaseModel):
+    payment_id: str
+    instruction_id: str
+    instruction_version: int
+    status: str
+    amount: float
+    currency: str
+    owning_lob: str
+    created_by_user_id: str
+    created_by_supervisor_id: str | None = None
+
+
+class PaymentEligibleApproversEvaluateRequest(BaseModel):
+    payment: PaymentEligibilityContext
+    instruction_status: str
+    instruction_end_date: str = ""
+
+
+class InstructionEligibleApproversEvaluateRequest(BaseModel):
+    instruction: dict

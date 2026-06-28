@@ -32,9 +32,6 @@ The instruction scenario verifies MongoDB security event count increases and inc
 | Submit payments | Front-office users submit DRAFT payments |
 | Approve payments | Funding approvers approve SUBMITTED payments |
 | Run payment scenario | Fixed 7-step OPA scenario (DRAFT → SUBMIT → APPROVE with denials) |
-| **Repair authorization** | Backfill missing OPA `details.authorization` on historical events and re-index APPROVE facts |
-
-The **repair authorization** action calls ILM `POST /api/v1/maintenance/repair-authorization` then `republish-approve-events`. Run once after upgrading demo data from before the authorization audit-trail fix.
 
 The payment scenario verifies MongoDB counts: **+4 ALERT** and **+3 INFO** events in `security_events.payment-service`:
 
@@ -59,7 +56,7 @@ PAT=$(docker exec zitadel-login cat /zitadel/bootstrap/login-client.pat | tr -d 
 cd zitadel-seed && ZITADEL_PAT="$PAT" python3 seed.py
 ```
 
-Includes service accounts **`etl-reader`** and **`svc-payment`** (not used by the harness UI).
+Includes service accounts **`etl-reader`**, **`svc-instruction`**, and **`svc-payment`** (not used by the harness UI).
 
 ## Instruction payloads
 
@@ -95,9 +92,3 @@ docker compose up -d ssi-demo-harness
 ```
 
 Requires ILM, payment service, and ZITADEL running.
-
-## API (maintenance)
-
-```bash
-curl -X POST http://localhost:8091/api/actions/repair-authorization
-```

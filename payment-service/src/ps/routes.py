@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
-from ps.dependencies import get_subject
+from ps.dependencies import get_compliance_subject, get_subject
 from ps.ilm_client import InstructionNotFoundError
 from ps.models.api import (
     CreatePaymentRequest,
+    PaymentEligibleApproversResponse,
     PaymentResponse,
     RejectPaymentRequest,
     Subject,
@@ -182,3 +183,18 @@ async def reject_payment(
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post("/{payment_id}/eligible-approvers", response_model=PaymentEligibleApproversResponse)
+async def payment_eligible_approvers(
+    payment_id: str,
+    _subject: Subject = Depends(get_compliance_subject),
+    service: PaymentService = Depends(get_service),
+) -> PaymentEligibleApproversResponse:
+    try:
+        data = await service.eligible_approvers(payment_id)
+        return PaymentEligibleApproversResponse.model_validate(data)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except InstructionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc

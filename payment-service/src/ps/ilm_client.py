@@ -92,6 +92,26 @@ class IlmClient:
         resp.raise_for_status()
         return resp.json()
 
+    async def get_instruction_as_service(self, instruction_id: str) -> dict[str, Any]:
+        """Read instruction context using the payment-service service account only."""
+        from ps.service_identity import service_identity
+
+        await service_identity.ensure_logged_in()
+        headers: dict[str, str] = {}
+        if service_identity.token:
+            headers["Authorization"] = f"Bearer {service_identity.token}"
+        if service_identity.session_id:
+            headers["X-Session-Id"] = service_identity.session_id
+
+        url = f"{self._base}/api/v1/instructions/{instruction_id}"
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(url, headers=headers)
+
+        if resp.status_code == 404:
+            raise InstructionNotFoundError(f"instruction {instruction_id} not found")
+        resp.raise_for_status()
+        return resp.json()
+
     async def mark_used(
         self,
         instruction_id: str,

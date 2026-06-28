@@ -39,35 +39,6 @@ async def test_publish_delegates_to_kafka(
 
 
 @pytest.mark.asyncio
-async def test_replace_document(repo: SecurityEventRepository, mock_collection: MagicMock) -> None:
-    mock_collection.replace_one = AsyncMock()
-    with patch("inst.security_event_repository.kafka_publisher") as mock_kafka:
-        mock_kafka.publish = AsyncMock()
-        await repo.replace_document({"event_id": "e1", "_id": "oid"})
-        mock_collection.replace_one.assert_awaited_once()
-        mock_kafka.publish.assert_awaited_once()
-
-
-@pytest.mark.asyncio
-async def test_replace_document_missing_event_id(repo: SecurityEventRepository) -> None:
-    with pytest.raises(ValueError, match="event_id"):
-        await repo.replace_document({})
-
-
-@pytest.mark.asyncio
-async def test_find_missing_authorization(
-    repo: SecurityEventRepository,
-    mock_collection: MagicMock,
-) -> None:
-    async def _async_iter():
-        yield {"event_id": "e1"}
-
-    mock_collection.find.return_value = _async_iter()
-    docs = await repo.find_missing_authorization(limit=10)
-    assert docs == [{"event_id": "e1"}]
-
-
-@pytest.mark.asyncio
 async def test_insert_and_record_methods(
     sample_subject,
     sample_instruction,

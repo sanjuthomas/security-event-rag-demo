@@ -1,33 +1,29 @@
-from __future__ import annotations
-
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
 
-from chat_application.authorization_client import AuthorizationClient, AuthorizationClientError
+from chat_application.authorization_client import EligibilityClient, EligibilityClientError
 
 
 @pytest.mark.asyncio
 async def test_eligible_approvers_for_payment_success() -> None:
-    client = AuthorizationClient(base_url="http://authz.test")
     response = httpx.Response(
         200,
         json={"payment_id": "p1", "eligible": []},
-        request=httpx.Request("POST", "http://authz.test/api/v1/payments/p1/eligible-approvers"),
+        request=httpx.Request("POST", "http://payment.test/api/v1/payments/p1/eligible-approvers"),
     )
 
-    with patch("httpx.AsyncClient") as client_cls:
-        instance = MagicMock()
-        instance.__aenter__ = AsyncMock(return_value=instance)
-        instance.__aexit__ = AsyncMock(return_value=None)
-        instance.post = AsyncMock(return_value=response)
-        client_cls.return_value = instance
-
+    with patch("chat_application.authorization_client.httpx.AsyncClient") as mock_client_cls:
+        mock_client = mock_client_cls.return_value.__aenter__.return_value
+        mock_client.post = AsyncMock(return_value=response)
+        client = EligibilityClient(
+            payment_service_url="http://payment.test",
+            instruction_service_url="http://instruction.test",
+        )
         body = await client.eligible_approvers_for_payment(
             "p1",
             bearer_token="token",
-            session_id="sess",
         )
 
     assert body["payment_id"] == "p1"
@@ -35,19 +31,16 @@ async def test_eligible_approvers_for_payment_success() -> None:
 
 @pytest.mark.asyncio
 async def test_eligible_approvers_for_payment_forbidden() -> None:
-    client = AuthorizationClient(base_url="http://authz.test")
     response = httpx.Response(
         403,
         json={"detail": "forbidden"},
-        request=httpx.Request("POST", "http://authz.test/api/v1/payments/p1/eligible-approvers"),
+        request=httpx.Request("POST", "http://payment.test/api/v1/payments/p1/eligible-approvers"),
     )
 
-    with patch("httpx.AsyncClient") as client_cls:
-        instance = MagicMock()
-        instance.__aenter__ = AsyncMock(return_value=instance)
-        instance.__aexit__ = AsyncMock(return_value=None)
-        instance.post = AsyncMock(return_value=response)
-        client_cls.return_value = instance
+    with patch("chat_application.authorization_client.httpx.AsyncClient") as mock_client_cls:
+        mock_client = mock_client_cls.return_value.__aenter__.return_value
+        mock_client.post = AsyncMock(return_value=response)
+        client = EligibilityClient(payment_service_url="http://payment.test")
 
-        with pytest.raises(AuthorizationClientError, match="COMPLIANCE_ANALYST"):
+        with pytest.raises(EligibilityClientError, match="COMPLIANCE_ANALYST"):
             await client.eligible_approvers_for_payment("p1", bearer_token="token")

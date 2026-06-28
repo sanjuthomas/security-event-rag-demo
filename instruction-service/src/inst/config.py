@@ -23,6 +23,12 @@ class Settings(BaseSettings):
     zitadel_service_pat: str | None = None
     zitadel_service_pat_file: Path | None = None
     auth_mode: str = "auto"  # auto | jwt | headers
+    compliance_roles: str = "COMPLIANCE_ANALYST,COMPLIANCE_OFFICER,PLATFORM_ADMIN"
+
+    @property
+    def compliance_role_set(self) -> set[str]:
+        return {role.strip() for role in self.compliance_roles.split(",") if role.strip()}
+
     ui_initial_instruction_limit: int = 200
     ui_initial_security_event_limit: int = 200
     kafka_enabled: bool = True
