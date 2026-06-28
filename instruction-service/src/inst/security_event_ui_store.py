@@ -7,6 +7,14 @@ from inst.config import settings
 from inst.database import get_security_events_database
 from inst.security_event_serialization import serialize_security_event
 
+_NOTABLE_FILTER = {
+    "$or": [
+        {"severity": "ALERT"},
+        {"event.outcome": "failure"},
+    ]
+}
+_NOTABLE_EVENT_CAP = 100
+
 
 class SecurityEventUiStore:
     def __init__(self) -> None:
@@ -24,8 +32,21 @@ class SecurityEventUiStore:
             self._last_poll_at = ts if isinstance(ts, datetime) else _parse_timestamp(str(ts))
 
     async def list_recent(self, *, limit: int) -> list[dict[str, Any]]:
-        cursor = self.collection.find({}).sort("timestamp", -1).limit(limit)
-        events = [serialize_security_event(doc) async for doc in cursor]
+        notable_cap = min(limit, _NOTABLE_EVENT_CAP)
+        notable_docs = [
+            doc
+            async for doc in self.collection.find(_NOTABLE_FILTER)
+            .sort("timestamp", -1)
+            .limit(notable_cap)
+        ]
+        info_docs = [
+            doc
+            async for doc in self.collection.find({"severity": "INFO"})
+            .sort("timestamp", -1)
+            .limit(limit)
+        ]
+        merged_docs = _merge_recent_documents(notable_docs, info_docs, limit=limit)
+        events = [serialize_security_event(doc) for doc in merged_docs]
         for event in events:
             self._seen_event_ids.add(event["event_id"])
         if events:
@@ -56,6 +77,41 @@ class SecurityEventUiStore:
     @property
     def seen_event_ids(self) -> set[str]:
         return self._seen_event_ids
+
+
+def _merge_recent_documents(
+    notable_docs: list[dict[str, Any]],
+    info_docs: list[dict[str, Any]],
+    *,
+    limit: int,
+) -> list[dict[str, Any]]:
+    notable_by_id: dict[str, dict[str, Any]] = {}
+    for doc in notable_docs:
+        event_id = doc.get("event_id")
+        if event_id and event_id not in notable_by_id:
+            notable_by_id[event_id] = doc
+    notable = sorted(notable_by_id.values(), key=_document_timestamp, reverse=True)[:limit]
+
+    info_slots = max(0, limit - len(notable))
+    if info_slots == 0:
+        return notable
+
+    info_candidates = [
+        doc
+        for doc in info_docs
+        if doc.get("event_id") and doc["event_id"] not in notable_by_id
+    ]
+    info = sorted(info_candidates, key=_document_timestamp, reverse=True)[:info_slots]
+    return sorted(notable + info, key=_document_timestamp, reverse=True)
+
+
+def _document_timestamp(doc: dict[str, Any]) -> datetime:
+    ts = doc.get("timestamp")
+    if isinstance(ts, datetime):
+        return ts.replace(tzinfo=None) if ts.tzinfo else ts
+    if ts:
+        return _parse_timestamp(str(ts))
+    return datetime.min
 
 
 def _parse_timestamp(value: str) -> datetime:

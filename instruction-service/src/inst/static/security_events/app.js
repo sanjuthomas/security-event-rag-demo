@@ -53,7 +53,7 @@ function resourceCell(resource = {}) {
   if (!instructionId) {
     return "—";
   }
-  return `<span class="mono" title="${instructionId}">${instructionId.split("-").pop()}</span>`;
+  return `<span class="mono">${instructionId}</span>`;
 }
 
 function shortEventId(eventId) {

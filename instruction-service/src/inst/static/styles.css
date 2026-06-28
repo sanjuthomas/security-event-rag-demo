@@ -311,9 +311,7 @@ tbody tr.row-new {
 }
 
 .col-instruction-id {
-  width: 7.5rem;
-  min-width: 7.5rem;
-  max-width: 7.5rem;
+  min-width: 14rem;
   white-space: nowrap;
 }
 

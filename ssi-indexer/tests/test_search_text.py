@@ -65,7 +65,7 @@ def test_payment_event_search_text():
     event = {
         "message": "payment blocked",
         "timestamp": "2024-01-01",
-        "severity": "MEDIUM",
+        "severity": "ALERT",
         "actor": {
             "user_id": "p1",
             "given_name": "Pay",

@@ -136,10 +136,9 @@ async def test_security_event_policy_denial(
         subject,
         payment,
         reason="denied",
-        severity=SecurityEventSeverity.HIGH,
     )
     col.insert_one.assert_awaited_once()
-    assert event.severity == SecurityEventSeverity.HIGH
+    assert event.severity == SecurityEventSeverity.ALERT
 
 
 @pytest.mark.asyncio

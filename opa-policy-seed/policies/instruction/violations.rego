@@ -7,8 +7,8 @@ package instruction.lifecycle
 # each key to a SecurityEvent message and severity level.
 #
 # Naming convention:
-#   ALERT_*   →  SecurityEvent severity=ALERT  (must be escalated immediately)
-#   <others>  →  SecurityEvent severity=WARNING (block and log, no escalation)
+#   ALERT_*   →  escalation-worthy violation (is_alert=true in authorization details)
+#   <others>  →  policy denial recorded as SecurityEvent severity=ALERT
 #
 # ILM can also query the convenience boolean `is_alert` to check whether at
 # least one ALERT-severity violation is present without iterating the full set:
@@ -30,7 +30,7 @@ violations["MISSING_ROLE_INSTRUCTION_APPROVER"] if {
 # ── Middle-office group required for creator actions ──────────────────────────
 # Rule:     CREATE / UPDATE / DELETE / SUBMIT require MIDDLE_OFFICE group
 #           membership in addition to INSTRUCTION_CREATOR.
-# Severity: WARNING — role without required group; likely misconfiguration.
+# Denial → ALERT security event — role without required group; likely misconfiguration.
 
 violations["NOT_MIDDLE_OFFICE_GROUP"] if {
     input.action in {"CREATE", "UPDATE", "DELETE", "SUBMIT"}
@@ -40,7 +40,7 @@ violations["NOT_MIDDLE_OFFICE_GROUP"] if {
 
 # ── Creator title eligibility ─────────────────────────────────────────────────
 # Rule:     Only Analyst through Managing Director may create or mutate drafts.
-# Severity: WARNING — title outside the permitted creator band.
+# Denial → ALERT security event — title outside the permitted creator band.
 
 violations["CREATOR_TITLE_INELIGIBLE"] if {
     input.action in {"CREATE", "UPDATE", "DELETE", "SUBMIT"}
@@ -51,7 +51,7 @@ violations["CREATOR_TITLE_INELIGIBLE"] if {
 
 # ── Account LOB must match instruction LOB ────────────────────────────────────
 # Rule:     The funding account's owning LOB must match the instruction LOB.
-# Severity: WARNING — cross-LOB account routing attempt.
+# Denial → ALERT security event — cross-LOB account routing attempt.
 
 violations["ACCOUNT_LOB_MISMATCH"] if {
     input.action in {"CREATE", "UPDATE", "DELETE"}
@@ -62,7 +62,7 @@ violations["ACCOUNT_LOB_MISMATCH"] if {
 
 # ── Invalid profit centre ─────────────────────────────────────────────────────
 # Rule:     owning_lob must be FICC, FX, or DESK_<name>.
-# Severity: WARNING — instruction scoped to an unknown LOB.
+# Denial → ALERT security event — instruction scoped to an unknown LOB.
 
 violations["INVALID_PROFIT_CENTER"] if {
     input.action in {
@@ -99,7 +99,7 @@ violations["INVALID_INSTRUCTION_STATUS"] if {
 
 # ── Three-year duration ceiling ───────────────────────────────────────────────
 # Rule:     effective_date to end_date must be positive and ≤ 3 years.
-# Severity: WARNING — standing instruction exceeds permitted horizon.
+# Denial → ALERT security event — standing instruction exceeds permitted horizon.
 
 violations["INSTRUCTION_DURATION_EXCEEDS_3Y"] if {
     input.action in {"CREATE", "UPDATE", "APPROVE"}
@@ -125,7 +125,7 @@ violations["ALERT_LOB_MISMATCH"] if {
 
 # ── Self-approval (segregation of duties) ────────────────────────────────────
 # Rule:     The instruction creator cannot approve their own instruction.
-# Severity: WARNING — four-eyes principle violation.
+# Denial → ALERT security event — four-eyes principle violation.
 
 violations["SELF_APPROVAL"] if {
     input.action == "APPROVE"
@@ -175,7 +175,7 @@ violations["SUSPEND_REQUIRES_MANAGING_DIRECTOR"] if {
 
 # ── Self-reactivation after suspend ───────────────────────────────────────────
 # Rule:     The user who suspended an instruction may not reactivate it.
-# Severity: WARNING — segregation on suspend/reactivate pair.
+# Denial → ALERT security event — segregation on suspend/reactivate pair.
 
 violations["SELF_REACTIVATION"] if {
     input.action == "REACTIVATE"

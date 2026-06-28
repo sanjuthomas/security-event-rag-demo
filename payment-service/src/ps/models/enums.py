@@ -18,12 +18,10 @@ class PaymentAction(StrEnum):
 
 
 class SecurityEventSeverity(StrEnum):
+    """Severity for security event monitoring — INFO for allows, ALERT for denials."""
+
     INFO = "INFO"
-    LOW = "LOW"
-    MEDIUM = "MEDIUM"
-    HIGH = "HIGH"
     ALERT = "ALERT"
-    CRITICAL = "CRITICAL"
 
 
 class SecurityEventOutcome(StrEnum):

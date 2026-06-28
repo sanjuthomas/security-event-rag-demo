@@ -14,7 +14,7 @@ def _sample_event() -> dict:
     return {
         "event_id": "evt-1",
         "timestamp": "2024-01-01T00:00:00Z",
-        "severity": "HIGH",
+        "severity": "ALERT",
         "message": "access denied",
         "actor": {
             "user_id": "u1",
@@ -133,7 +133,7 @@ def test_build_search_text_includes_key_fields():
     instruction = _sample_instruction()
     text = build_search_text(event, instruction)
     assert "access denied" in text
-    assert "HIGH" in text
+    assert "ALERT" in text
     assert "READ" in text
     assert "DENY" in text
     assert "u1" in text

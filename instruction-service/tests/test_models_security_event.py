@@ -42,14 +42,14 @@ def test_policy_denial(sample_subject: Subject, sample_instruction: CashSettleme
         sample_instruction,
         reason="denied",
     )
-    assert event.severity == SecurityEventSeverity.MEDIUM
+    assert event.severity == SecurityEventSeverity.ALERT
     assert event.event.outcome == SecurityEventOutcome.FAILURE
     assert event.event.type == ["access", "denied"]
     assert event.details["policy_engine"] == "opa"
     assert "Policy denied APPROVE" in event.message
 
 
-def test_policy_denial_alert_severity(
+def test_policy_denial_preserves_is_alert_in_details(
     sample_subject: Subject,
     sample_instruction: CashSettlementInstruction,
 ) -> None:
@@ -61,6 +61,7 @@ def test_policy_denial_alert_severity(
         details={"authorization": {"is_alert": True}},
     )
     assert event.severity == SecurityEventSeverity.ALERT
+    assert event.details["authorization"]["is_alert"] is True
 
 
 def test_obo_delegation_details(

@@ -23,22 +23,16 @@ function formatTime(value) {
   return date.toISOString().replace("T", " ").replace(".000Z", "Z");
 }
 
-function shortId(value) {
-  if (!value) return "—";
-  const parts = String(value).split("-");
-  return parts.length > 1 ? parts[parts.length - 1] : value;
-}
-
 function paymentIdLink(paymentId) {
   if (!paymentId) return "—";
   const href = `/ui/payments/${encodeURIComponent(paymentId)}`;
-  return `<a class="id-link mono" href="${href}" title="${paymentId}">${shortId(paymentId)}</a>`;
+  return `<a class="id-link mono" href="${href}">${paymentId}</a>`;
 }
 
 function instructionLink(instructionId) {
   if (!instructionId) return "—";
   const href = `http://localhost:8000/ui/instructions/${encodeURIComponent(instructionId)}`;
-  return `<a class="id-link mono" href="${href}" target="_blank" rel="noopener" title="${instructionId}">${shortId(instructionId)}</a>`;
+  return `<a class="id-link mono" href="${href}" target="_blank" rel="noopener">${instructionId}</a>`;
 }
 
 function statusBadge(status) {

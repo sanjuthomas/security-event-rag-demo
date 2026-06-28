@@ -181,12 +181,7 @@ class SecurityEvent(BaseModel):
             "policy_engine": "opa",
         }
         return cls(
-            severity=severity
-            or (
-                SecurityEventSeverity.ALERT
-                if (event_details.get("authorization") or {}).get("is_alert")
-                else SecurityEventSeverity.MEDIUM
-            ),
+            severity=severity or SecurityEventSeverity.ALERT,
             message=(
                 f"Policy denied {action.value} on instruction "
                 f"{instruction.instruction_id} by {subject.user_id}"

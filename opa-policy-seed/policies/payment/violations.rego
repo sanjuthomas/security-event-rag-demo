@@ -7,8 +7,8 @@ package payment.lifecycle
 # each key to a SecurityEvent message and severity level.
 #
 # Naming convention:
-#   ALERT_*   →  SecurityEvent severity=ALERT  (must be escalated immediately)
-#   <others>  →  SecurityEvent severity=WARNING (block and log, no escalation)
+#   ALERT_*   →  escalation-worthy violation (is_alert=true in authorization details)
+#   <others>  →  policy denial recorded as SecurityEvent severity=ALERT
 #
 # The payment service can also query the convenience boolean `is_alert` to
 # check whether at least one ALERT-severity violation is present without
@@ -40,7 +40,7 @@ violations["ALERT_AMOUNT_EXCEEDS_SUBJECT_LIMIT"] if {
 # ── Subject has no club group at all ─────────────────────────────────────────
 # Rule:     Subject holds the FUNDING_APPROVER role but has not been placed in
 #           any payment-limit club.  This is an identity misconfiguration.
-# Severity: WARNING — block the action; no amount limit can be validated.
+# Denial → ALERT security event — block the action; no amount limit can be validated.
 
 violations["NO_LIMIT_GROUP_ASSIGNED"] if {
     input.action in {"CREATE_PAYMENT", "APPROVE_PAYMENT"}
@@ -101,7 +101,7 @@ violations["ALERT_LOB_COVERAGE_VIOLATION"] if {
 # Rule:     The person who created the payment cannot also approve it.
 #           This applies even when the subject holds BOTH PAYMENT_CREATOR and
 #           FUNDING_APPROVER roles simultaneously.
-# Severity: WARNING — four-eyes principle violation.
+# Denial → ALERT security event — four-eyes principle violation.
 
 violations["SELF_APPROVAL"] if {
     input.action == "APPROVE_PAYMENT"

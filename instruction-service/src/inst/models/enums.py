@@ -96,14 +96,10 @@ MUTATING_ACTIONS = frozenset(
 
 
 class SecurityEventSeverity(StrEnum):
-    """Normalized severity for SIEM correlation and alerting."""
+    """Severity for security event monitoring — INFO for allows, ALERT for denials."""
 
     INFO = "INFO"
-    LOW = "LOW"
-    MEDIUM = "MEDIUM"
-    HIGH = "HIGH"
     ALERT = "ALERT"
-    CRITICAL = "CRITICAL"
 
 
 class SecurityEventOutcome(StrEnum):

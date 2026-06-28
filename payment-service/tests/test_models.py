@@ -132,9 +132,8 @@ def test_payment_security_event_policy_denial(subject: Subject, payment: Payment
         subject,
         payment,
         reason="denied",
-        severity=SecurityEventSeverity.HIGH,
     )
-    assert event.severity == SecurityEventSeverity.HIGH
+    assert event.severity == SecurityEventSeverity.ALERT
     assert event.event.outcome == SecurityEventOutcome.FAILURE
     assert event.event.type == ["access", "denied"]
     assert event.details["policy_engine"] == "opa"
