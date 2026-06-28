@@ -51,7 +51,7 @@ async def lifespan(app: FastAPI):
         qdrant=qdrant_client,
         neo4j=neo4j_client,
     )
-    logger.info("security event chat ready on port %s", settings.port)
+    logger.info("PolicyPilot ready on port %s", settings.port)
     yield
     qdrant_client.close()
     await neo4j_client.close()
@@ -59,8 +59,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Security Event Chat",
-    description="Natural-language Q&A over security events (vector + BM25 + Neo4j + Ollama)",
+    title="PolicyPilot",
+    description="PolicyPilot — natural-language policy Q&A over security events (vector + BM25 + Neo4j + Ollama)",
     version=__version__,
     lifespan=lifespan,
 )

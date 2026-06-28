@@ -1,6 +1,7 @@
-# SSI Chat
+# PolicyPilot (`ssi-chat`)
 
-Conversational Q&A over indexed security events, instructions, and payments. Modeled after
+**PolicyPilot** is the conversational assistant for policy Q&A over indexed security events,
+instructions, and payments. Modeled after
 [sec-edgar-filings-chat](https://github.com/sanjuthomas/sec-edgar-filings-chat), but retrieval always runs **vector + BM25 + Neo4j** — no store picker in the UI.
 
 ## URL

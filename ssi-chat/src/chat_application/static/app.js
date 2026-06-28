@@ -15,6 +15,7 @@ const authLoginBtn = document.getElementById("auth-login-btn");
 const authLogoutBtn = document.getElementById("auth-logout-btn");
 
 const AUTH_STORAGE_KEY = "ssi-chat-session";
+const ASSISTANT_NAME = "PolicyPilot";
 
 /** @type {{ role: 'user' | 'assistant', content: string }[]} */
 let history = [];
@@ -130,7 +131,7 @@ function appendMessage(role, content) {
   const wrap = document.createElement("div");
   wrap.className = `message ${role}`;
   wrap.innerHTML = `
-    <div class="message-role">${role === "user" ? "You" : "Assistant"}</div>
+    <div class="message-role">${role === "user" ? "You" : ASSISTANT_NAME}</div>
     <div class="message-body"></div>
   `;
   const body = wrap.querySelector(".message-body");
@@ -223,7 +224,7 @@ async function sendMessage(text) {
     }
     renderMeta(payload);
   } catch (error) {
-    appendMessage("assistant", `Sorry, something went wrong: ${error.message}`);
+    appendMessage("assistant", `${ASSISTANT_NAME} hit an error: ${error.message}`);
   } finally {
     sendBtn.disabled = false;
     sendBtn.textContent = "Send";
@@ -257,7 +258,7 @@ clearBtn.addEventListener("click", () => {
   thread.innerHTML = "";
   appendMessage(
     "assistant",
-    "Chat cleared. Ask a new question about security events, instructions, or payments."
+    "Chat cleared. Ask PolicyPilot a new question about security events, instructions, or payments."
   );
   metaEmpty.classList.remove("hidden");
   metaContent.classList.add("hidden");

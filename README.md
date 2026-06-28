@@ -52,7 +52,7 @@ flowchart TB
         AUTHZ[authorization-service :8094]
         HARNESS[ssi-demo-harness :8091]
         ETL[ssi-indexer :8090]
-        CHAT[ssi-chat :8092]
+        CHAT[PolicyPilot :8092]
     end
 
     subgraph policy [Policy]
@@ -359,7 +359,7 @@ Embedding throughput with `bge-m3` is approximately **80–120 documents/second*
 | `instruction-service` | FastAPI lifecycle API — routes policy checks to authorization-service (OBO), `details.authorization` audit block, Mongo persistence, Kafka publishing, compliance eligible-approvers API |
 | `payment-service` | Cash payment lifecycle against approved SSI instructions — same authz/OBO pattern, Mongo persistence, Kafka publishing, payment and security event UIs, compliance eligible-approvers API |
 | `ssi-indexer` | Four Kafka consumers — instruction + payment security events and state facts → Neo4j graph writer + Qdrant hybrid indexer (`ssi_search_index`) + search console UI |
-| `ssi-chat` | RAG chat — four search modes, triple retrieval, Who/When/Why approval audit (deterministic facts + LLM WHY rewrite), planned Cypher, regression suite; compliance sign-in for live **who can approve?** via payment-service and instruction-service |
+| `ssi-chat` | **PolicyPilot** — RAG chat assistant; four search modes, triple retrieval, Who/When/Why approval audit (deterministic facts + LLM WHY rewrite), planned Cypher, regression suite; compliance sign-in for live **who can approve?** via payment-service and instruction-service |
 | `authorization-service` | Stateless OPA gateway — lifecycle evaluate + batch eligible-approvers; user directory UI; reads `users.yaml`; no database |
 | `ssi-demo-harness` | ZITADEL-authenticated UI to drive lifecycles and OPA policy scenarios |
 | `neo4j-graph-model` | Graph schema docs, Cypher constraints/indexes, example queries |
@@ -480,10 +480,10 @@ All passwords are `Password1!`. Login names follow `{user_id}@ssi.local`.
 | `etl-reader` | — | Service account — excluded from security event emission (`SECURITY_EVENT_EXCLUDED_USER_IDS`) | — |
 | `svc-instruction` | — | Service account — instruction service → authorization-service (OBO) | — |
 | `svc-payment` | — | Service account — payment service → authorization-service and ILM (OBO) | — |
-| `admin-001` | Platform Administrator | **Platform admin** — secured UIs (harness, browsers, ETL console, user directory) and **ssi-chat** | — |
-| `comp-001` / `comp-002` | Compliance analysts | **ssi-chat** and live eligible-approvers questions (via domain services) | — |
+| `admin-001` | Platform Administrator | **Platform admin** — secured UIs (harness, browsers, ETL console, user directory) and **PolicyPilot** | — |
+| `comp-001` / `comp-002` | Compliance analysts | **PolicyPilot** and live eligible-approvers questions (via domain services) | — |
 
-**Platform admin (`admin-001`)** — sign in at any secured admin UI (test harness, instruction browser, payment browser, ETL indexer, authorization user directory) and at **ssi-chat** (`http://localhost:8092`). Requires `PLATFORM_ADMIN` role and `ADMIN` group. All `/api/ui/*` and harness `/api/*` routes require this login; chat and domain-service eligible-approvers APIs accept `PLATFORM_ADMIN` in addition to compliance roles. Business lifecycle APIs still use their respective seeded users via ZITADEL JWT.
+**Platform admin (`admin-001`)** — sign in at any secured admin UI (test harness, instruction browser, payment browser, ETL indexer, authorization user directory) and at **PolicyPilot** (`http://localhost:8092`). Requires `PLATFORM_ADMIN` role and `ADMIN` group. All `/api/ui/*` and harness `/api/*` routes require this login; chat and domain-service eligible-approvers APIs accept `PLATFORM_ADMIN` in addition to compliance roles. Business lifecycle APIs still use their respective seeded users via ZITADEL JWT.
 
 After changing `users.yaml`, re-seed Zitadel (`zitadel-seed` container or manual seed script).
 
@@ -748,7 +748,7 @@ ssi-indexer           # :8090
 
 # SSI chat
 cd ssi-chat && pip install -e .
-ssi-chat              # :8092
+ssi-chat              # PolicyPilot :8092
 
 # Authorization service
 cd authorization-service && pip install -e .
@@ -777,7 +777,7 @@ Each service reads configuration from environment variables (see its own README 
 ├── authorization-service/           # OPA gateway + user directory UI
 ├── shared/authz_client/             # HTTP client used by domain services → authz
 ├── ssi-indexer/                     # Kafka indexer + search console
-├── ssi-chat/                        # RAG chat + compliance policy Q&A
+├── ssi-chat/                        # PolicyPilot — RAG chat + compliance policy Q&A
 ├── ssi-demo-harness/                # Demo scenario harness UI
 ├── neo4j-graph-model/               # Graph schema and example queries
 ├── opa-policy-seed/                 # Rego policies

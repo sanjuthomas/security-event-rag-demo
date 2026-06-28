@@ -1,4 +1,4 @@
-# Chat regression suite
+# PolicyPilot regression suite (`ssi-chat`)
 
 YAML-driven regression tests for **Security Events**, **Instructions**, and **Payments** chat modes.
 
@@ -88,7 +88,7 @@ RUN_API_SMOKE=1 pytest tests/test_api_smoke.py -v
 | **instruction-service** | UI list (admin), REST auth gate; lifecycle via harness seed |
 | **payment-service** | UI list (admin), REST auth gate; lifecycle via harness seed |
 | **ssi-indexer** | Stats, vector search, graph events, cypher run/generate, auth gates |
-| **ssi-chat** | Compliance login, `/api/chat` (~60 YAML cases), compliance-users |
+| **PolicyPilot** (`ssi-chat`) | Compliance login, `/api/chat` (~60 YAML cases), compliance-users |
 | **authorization-service** | Health, service-auth gate on evaluate endpoints |
 | **payment-service** / **instruction-service** | Payment/instruction eligible-approvers (compliance JWT), auth gate |
 

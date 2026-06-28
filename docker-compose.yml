@@ -465,6 +465,7 @@ services:
       - ./neo4j-graph-model:/app/neo4j-graph-model:ro
       - zitadel-bootstrap:/zitadel/bootstrap:ro
       - ./zitadel-seed:/app/zitadel-seed:ro
+      - ./ssi-chat/src/chat_application/static:/usr/local/lib/python3.12/site-packages/chat_application/static:ro
     depends_on:
       qdrant:
         condition: service_started
