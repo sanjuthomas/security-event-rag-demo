@@ -5,11 +5,10 @@ import logging
 from datetime import datetime, timezone
 from uuid import uuid4
 
+from authz_client import AuthzClient
 from platform_auth import is_platform_admin
 from sequence_client import SequenceClient
 from sequence_client.errors import SequenceClientError
-
-from authz_client import AuthzClient
 
 from ps.authorization import (
     build_authorization_block,

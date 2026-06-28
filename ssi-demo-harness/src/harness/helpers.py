@@ -4,7 +4,12 @@ import random
 from enum import StrEnum
 
 from harness.config import Settings
-from harness.fixtures import SeedFile, SeedUser, build_instruction_payload, load_users, user_by_id
+from harness.fixtures import (
+    SeedFile,
+    SeedUser,
+    build_instruction_payload,
+    load_users,
+)
 from harness.ilm_client import InstructionLifecycleClient
 from harness.payment_client import PaymentServiceClient
 from harness.zitadel_auth import SessionCredentials, ZitadelAuthClient

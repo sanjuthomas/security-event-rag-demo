@@ -1,5 +1,4 @@
 import asyncio
-import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -13,7 +12,12 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
-from telemetry import configure_telemetry, get_logger, instrument_app, shutdown_telemetry
+from telemetry import (
+    configure_telemetry,
+    get_logger,
+    instrument_app,
+    shutdown_telemetry,
+)
 
 from etl.admin import get_admin_subject
 from etl.auth_routes import router as auth_router

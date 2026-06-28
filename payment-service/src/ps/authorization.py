@@ -8,7 +8,6 @@ from ps.models.api import Subject
 from ps.models.enums import PaymentAction
 from ps.models.payment import Payment
 
-
 VIOLATION_LABELS: dict[str, str] = {
     "ALERT_AMOUNT_EXCEEDS_100B_LIMIT": "payment amount exceeds absolute 100B USD ceiling",
     "ALERT_AMOUNT_EXCEEDS_SUBJECT_LIMIT": "payment amount exceeds subject club limit",

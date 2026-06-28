@@ -8,7 +8,6 @@ from inst.models.api import Subject
 from inst.models.enums import LifecycleAction
 from inst.models.instruction import CashSettlementInstruction
 
-
 VIOLATION_LABELS: dict[str, str] = {
     "MISSING_ROLE_INSTRUCTION_CREATOR": "missing INSTRUCTION_CREATOR role",
     "MISSING_ROLE_INSTRUCTION_APPROVER": "missing INSTRUCTION_APPROVER role",

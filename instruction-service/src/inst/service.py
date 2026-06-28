@@ -1,10 +1,9 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
+from authz_client import AuthzClient
 from sequence_client import SequenceClient
 from sequence_client.errors import SequenceClientError
-
-from authz_client import AuthzClient
 
 from inst.authorization import (
     build_authorization_block,

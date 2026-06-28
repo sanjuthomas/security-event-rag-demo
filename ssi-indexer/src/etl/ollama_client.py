@@ -4,8 +4,8 @@ import json
 import logging
 
 import httpx
-
 from cypher_gen import cypher_system_prompt, extract_cypher
+
 from etl.config import settings
 
 logger = logging.getLogger(__name__)

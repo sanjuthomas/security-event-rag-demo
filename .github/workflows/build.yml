@@ -70,6 +70,15 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install shared packages
+        run: |
+          pip install --quiet \
+            ./shared/telemetry \
+            ./shared/platform_auth \
+            ./shared/sequence_client \
+            ./shared/authz_client \
+            ./shared/cypher_gen
+
       - name: Install and run tests with coverage
         working-directory: ${{ matrix.service }}
         run: |
@@ -94,8 +103,8 @@ jobs:
             context: .
             dockerfile: sequence-service/Dockerfile
           - service: ssi-chat
-            context: ./ssi-chat
-            dockerfile: Dockerfile
+            context: .
+            dockerfile: ssi-chat/Dockerfile
           - service: ssi-indexer
             context: .
             dockerfile: ssi-indexer/Dockerfile

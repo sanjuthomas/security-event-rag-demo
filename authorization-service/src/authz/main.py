@@ -1,12 +1,16 @@
 from __future__ import annotations
 
-import logging
 from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from telemetry import configure_telemetry, get_logger, instrument_app, shutdown_telemetry
+from telemetry import (
+    configure_telemetry,
+    get_logger,
+    instrument_app,
+    shutdown_telemetry,
+)
 
 from authz import __version__
 from authz.auth_routes import router as auth_router

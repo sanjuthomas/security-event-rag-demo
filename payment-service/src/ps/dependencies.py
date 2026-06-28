@@ -1,9 +1,9 @@
 from fastapi import Depends, Header, HTTPException
+from platform_auth import is_platform_admin
 
 from ps.auth import subject_from_bearer_token
 from ps.config import settings
 from ps.models.api import Subject
-from platform_auth import is_platform_admin
 
 
 def _subject_from_headers(

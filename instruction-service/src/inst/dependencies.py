@@ -1,10 +1,10 @@
 from fastapi import Depends, Header, HTTPException
+from platform_auth import is_platform_admin
 
 from inst.auth import subject_from_bearer_token, subject_from_obo_call
 from inst.config import settings
 from inst.models.api import Subject
 from inst.models.enums import is_valid_owning_lob
-from platform_auth import is_platform_admin
 
 
 def _subject_from_headers(

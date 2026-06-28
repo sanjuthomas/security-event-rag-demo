@@ -1,16 +1,18 @@
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
-from fastapi.testclient import TestClient
-
+from authz.authorization_routes import _eligibility_service
+from authz.evaluate_dependencies import get_service_caller
 from authz.main import app
 from authz.models import PaymentEligibilityContext, Subject
+from fastapi.testclient import TestClient
 
 
 @pytest.fixture
-def client() -> TestClient:
+def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    monkeypatch.setattr("authz.config.settings.oidc_issuer_url", "http://localhost:8080")
     return TestClient(app)
 
 
@@ -61,13 +63,12 @@ def test_payment_eligible_approvers_success(client: TestClient) -> None:
         "candidates_evaluated": 0,
     }
 
-    with (
-        patch("authz.authorization_routes.get_service_caller", return_value=service_subject),
-        patch("authz.authorization_routes._eligibility_service") as mock_service_factory,
-    ):
-        mock_service = AsyncMock()
-        mock_service.eligible_approvers_for_payment.return_value = response_payload
-        mock_service_factory.return_value = mock_service
+    mock_service = AsyncMock()
+    mock_service.eligible_approvers_for_payment.return_value = response_payload
+
+    app.dependency_overrides[get_service_caller] = lambda: service_subject
+    app.dependency_overrides[_eligibility_service] = lambda: mock_service
+    try:
         response = client.post(
             "/api/v1/authorization/payments/eligible-approvers",
             headers={"Authorization": "Bearer svc-token"},
@@ -85,6 +86,8 @@ def test_payment_eligible_approvers_success(client: TestClient) -> None:
                 "instruction_status": "STANDING",
             },
         )
+    finally:
+        app.dependency_overrides.clear()
 
     assert response.status_code == 200
     assert response.json()["payment_id"] == "p1"
