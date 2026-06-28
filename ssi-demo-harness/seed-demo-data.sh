@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Seed the SSI demo stack with instructions, payments, and many ALERT security events.
 #
+# Prerequisites on the host (before reset):
+#   ollama pull snowflake-arctic-embed:m
+#   ollama pull llama3:8b
+#
 # By default performs a full reset (docker compose down -v, up, Zitadel users) then seeds
 # via the harness HTTP API plus extra policy-denial calls inside the harness container.
 #

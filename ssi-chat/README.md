@@ -41,7 +41,7 @@ flowchart LR
 
 1. **Planned Cypher** — count, ranking, hierarchy, and instruction approval-by-ID questions bypass LLM Cypher generation (Neo4j is authoritative)
 2. **Exact lookup** — UUID in question triggers Qdrant fetch by ID; Instructions mode also fetches APPROVE security events for approval questions
-3. **Vector** — `bge-m3:latest` embed → Qdrant dense search (mode-filtered)
+3. **Vector** — `snowflake-arctic-embed:m` embed → Qdrant dense search (mode-filtered)
 4. **BM25** — Qdrant sparse lexical search (mode-filtered)
 5. **Neo4j** — Ollama generates read-only Cypher from mode-specific prompts + `neo4j-graph-model/relationships.cypher`
 6. **Merge** — reciprocal rank fusion (k=60), dedupe by `event_id` / `instruction_id`
@@ -99,10 +99,12 @@ See **`regression/questions.yaml`** for the full regression bank (~60 cases) and
 
 ## Configuration (Docker)
 
+Copy `.env.example` to `.env` at the repo root to override defaults. Docker Compose and pydantic-settings both read it.
+
 | Variable | Default |
 |----------|---------|
-| `OLLAMA_EMBEDDING_MODEL` | `bge-m3:latest` |
-| `OLLAMA_CHAT_MODEL` | `qwen3:30b` |
+| `OLLAMA_EMBEDDING_MODEL` | `snowflake-arctic-embed:m` |
+| `OLLAMA_CHAT_MODEL` | `llama3:8b` |
 | `QDRANT_COLLECTION` | `ssi_search_index` |
 | `NEO4J_URI` | `bolt://neo4j:7687` |
 | `GRAPH_MODEL_DIR` | `/app/neo4j-graph-model` |

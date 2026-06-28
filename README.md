@@ -67,7 +67,7 @@ flowchart TB
     end
 
     subgraph ml [Host ML]
-        OLLAMA[Ollama — bge-m3 + qwen3]
+        OLLAMA[Ollama — arctic-embed + llama3]
     end
 
     ZITADEL --> ILM
@@ -234,7 +234,7 @@ Example authorization block on an APPROVE security event:
 
 No single retrieval strategy reliably handles the full range of questions a user asks over security events.
 
-**Dense vector search** (via `bge-m3` embeddings) excels at **semantic similarity** — "who tried to approve each other's instructions?" or "show me policy denial events for FX desk" — where the meaning matters more than the exact words. But dense search struggles with **exact identifiers**: if the user pastes a UUID like `2f75858d-d845-40d4-b9fb-43951a8c40e2`, the embedding of that string carries little semantic signal and the cosine similarity ranking is unreliable.
+**Dense vector search** (via `snowflake-arctic-embed:m` embeddings) excels at **semantic similarity** — "who tried to approve each other's instructions?" or "show me policy denial events for FX desk" — where the meaning matters more than the exact words. But dense search struggles with **exact identifiers**: if the user pastes a UUID like `2f75858d-d845-40d4-b9fb-43951a8c40e2`, the embedding of that string carries little semantic signal and the cosine similarity ranking is unreliable.
 
 **BM25 sparse search** is a classical term-frequency model (the same family as Elasticsearch's default scorer). It excels precisely where dense search fails: **exact-match tokens** — UUIDs, user IDs (`mo-100`, `ficc-300`), action names (`APPROVE`, `REJECT`), currency codes (`USD`, `EUR`). However, BM25 has no concept of synonymy or paraphrase — "declined" and "rejected" are unrelated tokens to BM25.
 
@@ -247,7 +247,7 @@ score_hybrid(doc) = RRF(rank_dense, rank_bm25)
 
 Reciprocal Rank Fusion (RRF, Cormack et al. 2009) combines ranked lists without requiring score normalisation. The constant `k=60` dampens the influence of very high ranks. Empirically, hybrid search consistently outperforms either retriever alone in recall@10 across heterogeneous query distributions — a result confirmed in the BEIR benchmark suite and Qdrant's own evaluations.
 
-Qdrant was chosen because it natively supports **named vectors** (one point can carry both a dense 1024-d float32 vector and a BM25 sparse vector), runs hybrid queries server-side, and exposes a clean async Python client. The BM25 sparse encoder (`qdrant/bm25`) runs inside Qdrant itself — no separate sparse-encoder service is needed.
+Qdrant was chosen because it natively supports **named vectors** (one point can carry both a dense 768-d float32 vector and a BM25 sparse vector), runs hybrid queries server-side, and exposes a clean async Python client. The BM25 sparse encoder (`qdrant/bm25`) runs inside Qdrant itself — no separate sparse-encoder service is needed.
 
 ---
 
@@ -290,27 +290,29 @@ The graph also serves as a **cross-validation layer**: if a UUID is present in t
 
 | Model | Dim | Context | Strengths | Why not used here |
 |---|---|---|---|---|
-| `bge-m3:latest` ✓ | 1024 | 8192 | Multilingual, unified dense+sparse+multi-vector, financial text | — |
-| `nomic-embed-text` | 768 | 8192 | Fast, small, good English recall | Lower dimension, English-only |
+| `snowflake-arctic-embed:m` ✓ | 768 | 512 | Strong retrieval quality, compact, English-focused | — |
+| `bge-m3:latest` | 1024 | 8192 | Multilingual, unified dense+sparse+multi-vector | Prior default; replaced for arctic retrieval quality |
+| `nomic-embed-text` | 768 | 8192 | Fast, small, good English recall | Lower MTEB retrieval vs arctic-m |
 | `mxbai-embed-large` | 1024 | 512 | Strong English MTEB scores | Very short context window |
 | `text-embedding-3-small` (OpenAI) | 1536 | 8191 | High quality | Requires API key, not local |
 
-`bge-m3` was selected for its **8192-token context window** (security event documents with full instruction payloads can be long), its **multilingual capability**, and the fact that it is the only open model that natively supports dense, sparse, and multi-vector retrieval from a single forward pass.
+`snowflake-arctic-embed:m` is the default embedding model — **768-dimensional** dense vectors indexed in Qdrant alongside BM25 sparse retrieval. After changing embedding models, wipe volumes and re-seed so Qdrant is recreated with the new vector size.
 
 **Model selection — LLM (Cypher generation + answer synthesis):**
 
 | Model | Params | Context | Cypher quality | Notes |
 |---|---|---|---|---|
-| `qwen3:30b` ✓ | 30B | 32 768 | Excellent | Strong structured output, handles complex schema |
+| `llama3:8b` ✓ | 8B | 8 192 | Good | Default chat/Cypher model (quantised via Ollama) |
+| `llama3:70b` | 70B | 8 192 | Excellent | Higher quality; needs more RAM/GPU |
+| `qwen3:30b` | 30B | 32 768 | Excellent | Prior default; smaller footprint |
 | `llama3.1:8b` | 8B | 128 000 | Good | Fast, lower quality Cypher for multi-hop queries |
 | `mistral:7b` | 7B | 32 768 | Fair | Tends to hallucinate relationship directions |
 | `codellama:13b` | 13B | 16 384 | Good | Strong on code but weaker on natural-language synthesis |
-| `llama3.3:70b` | 70B | 128 000 | Excellent | Too large for M1 Max 64 GB at full precision |
-| `gemma3:27b` | 27B | 128 000 | Very good | Competitive alternative to qwen3:30b |
+| `gemma3:27b` | 27B | 128 000 | Very good | Competitive mid-size alternative |
 
-`qwen3:30b` was selected because it fits comfortably in 64 GB unified memory at 4-bit quantisation (~19 GB), consistently generates correct Cypher for multi-hop graph queries (including `OPTIONAL MATCH` chains and `coalesce` expressions), and produces well-structured natural-language answers that correctly cite event IDs and user names.
+`llama3:8b` is the default for PolicyPilot answer synthesis and Cypher generation. Ensure the model is pulled locally before starting the stack (`ollama pull llama3:8b`).
 
-> To swap models: `OLLAMA_CHAT_MODEL=gemma3:27b` (or any model pulled via `ollama pull`).
+> To swap models: copy `.env.example` to `.env` and set `OLLAMA_CHAT_MODEL` / `OLLAMA_EMBEDDING_MODEL`, then re-pull via `ollama pull`.
 
 ---
 
@@ -327,9 +329,9 @@ All models and benchmarks in this demo were run on the following hardware:
 | GPU bus | Built-in (unified memory — no PCIe transfer overhead) |
 | Metal support | Metal 3 |
 
-The unified memory architecture means the CPU, GPU, and Neural Engine share the same 64 GB pool with no PCIe copy overhead between host and device memory. This is particularly advantageous for LLM inference: `qwen3:30b` at Q4_K_M quantisation (~19 GB) fits entirely in GPU-accessible memory, achieving approximately **25–35 tokens/second** generation throughput on the 32-core GPU via Ollama's Metal backend.
+The unified memory architecture means the CPU, GPU, and Neural Engine share the same 64 GB pool with no PCIe copy overhead between host and device memory. The default `llama3:8b` chat model runs comfortably on this hardware; use `llama3:70b` only if you have enough RAM/GPU headroom.
 
-Embedding throughput with `bge-m3` is approximately **80–120 documents/second** for typical security event document lengths, which is sufficient for real-time ETL indexing at the event rates generated by this demo.
+Embedding throughput with `snowflake-arctic-embed:m` is typically faster than larger multilingual encoders and is sufficient for real-time ETL indexing at demo event rates.
 
 ---
 
@@ -371,37 +373,36 @@ Embedding throughput with `bge-m3` is approximately **80–120 documents/second*
 
 ## Models
 
-### Embedding model — `bge-m3:latest`
+### Embedding model — `snowflake-arctic-embed:m`
 
-The ETL and Chat use [BAAI/BGE-M3](https://huggingface.co/BAAI/bge-m3) served via Ollama for dense vector embeddings.
+The ETL and Chat use [Snowflake Arctic Embed M](https://huggingface.co/Snowflake/snowflake-arctic-embed-m-v1.5) served via Ollama for dense vector embeddings.
 
 | Property | Value |
 |----------|-------|
-| Model | `bge-m3:latest` |
-| Provider | BAAI (Beijing Academy of AI) |
-| Architecture | XLM-RoBERTa-based encoder |
-| Output dimension | **1024** float32 |
-| Context window | 8192 tokens |
-| Strengths | Multilingual (100+ languages), strong on domain-specific financial text, unified dense + sparse + multi-vector |
+| Model | `snowflake-arctic-embed:m` |
+| Provider | Snowflake |
+| Output dimension | **768** float32 |
+| Context window | 512 tokens (query prefix applied by Ollama) |
+| Strengths | Strong retrieval quality on English enterprise text |
 
-BGE-M3 is queried through `POST /api/embed` on the local Ollama instance. Each security event document is embedded at write time by the ETL and at query time by the Chat for similarity search.
+Embeddings are queried through `POST /api/embed` on the local Ollama instance. Each document is embedded at write time by the ETL and at query time by PolicyPilot for similarity search.
+
+> **Important:** changing the embedding model changes the Qdrant dense vector size. Run `./ssi-demo-harness/seed-demo-data.sh` (full reset) after switching models.
 
 ### Sparse retrieval — `qdrant/bm25`
 
 Alongside dense vectors, both the ETL indexer and Chat retriever use Qdrant's built-in **BM25** sparse encoder (`qdrant/bm25`). BM25 is a classical term-frequency retrieval model — it complements dense semantic search by excelling at exact-match terms like UUIDs, user IDs (`mo-100`, `ficc-300`), and action names (`APPROVE`, `REJECT`).
 
-### Chat / answer model — `qwen3:30b`
+### Chat / answer model — `llama3:8b`
 
-The LLM used for Cypher generation and answer synthesis is [Qwen3-30B](https://huggingface.co/Qwen/Qwen3-30B) served via Ollama.
+The LLM used for Cypher generation and answer synthesis is **Llama 3 8B** served via Ollama.
 
 | Property | Value |
 |----------|-------|
-| Model | `qwen3:30b` (default, configurable via `OLLAMA_CHAT_MODEL`) |
-| Provider | Alibaba Cloud — Qwen team |
-| Architecture | Dense transformer, Mixture-of-Experts variant |
-| Parameters | 30B |
-| Context window | 32 768 tokens |
-| Strengths | Strong code and structured output generation (Cypher), instruction following, multilingual |
+| Model | `llama3:8b` (default, configurable via `OLLAMA_CHAT_MODEL` in `.env`) |
+| Provider | Meta |
+| Parameters | 8B |
+| Strengths | Fast inference, structured output (Cypher), natural-language synthesis |
 
 The model is called twice per user question (or three times for instruction approval audit questions — see below):
 1. **Cypher generation** — mode-specific system prompt + schema + question → a read-only Neo4j Cypher query
@@ -410,7 +411,7 @@ The model is called twice per user question (or three times for instruction appr
 
 Both calls are made via `POST /api/chat` on the local Ollama instance with `stream: false`.
 
-> To use a different chat model: `OLLAMA_CHAT_MODEL=llama3.1:8b` (or any model pulled via `ollama pull`).
+> To use a different chat model: set `OLLAMA_CHAT_MODEL=qwen3:30b` in `.env` (or export it) and re-pull via `ollama pull`.
 
 ---
 
@@ -420,17 +421,20 @@ Both calls are made via `POST /api/chat` on the local Ollama instance with `stre
 |-------------|-------|
 | Docker + Docker Compose | All containers are defined in `docker-compose.yml` |
 | [Ollama](https://ollama.com) running on the host | Needed by ETL and Chat; containers reach it via `host.docker.internal:11434` |
-| `bge-m3:latest` model pulled | `ollama pull bge-m3:latest` |
-| A chat model pulled | Default: `qwen3:30b` — `ollama pull qwen3:30b` (substitute any model via `OLLAMA_CHAT_MODEL`) |
+| `snowflake-arctic-embed:m` model pulled | `ollama pull snowflake-arctic-embed:m` |
+| Chat model pulled | Default: `llama3:8b` — `ollama pull llama3:8b` |
 
 ---
 
 ## Quick start
 
 ```bash
+# 0. Optional: configure Ollama models (defaults work out of the box)
+cp .env.example .env
+
 # 1. Pull Ollama models on the host
-ollama pull bge-m3:latest
-ollama pull qwen3:30b       # or any chat model you prefer
+ollama pull snowflake-arctic-embed:m
+ollama pull llama3:8b
 
 # 2. Start the full stack
 docker compose up -d
@@ -669,7 +673,7 @@ User question + search mode (events | instructions | payments | all)
 │
 ├─ UUID detected? ──► Exact Qdrant fetch + fixed Neo4j lookup (pinned to top of context)
 │
-├─► Qdrant dense vector search (bge-m3), filtered by mode
+├─► Qdrant dense vector search (snowflake-arctic-embed:m), filtered by mode
 ├─► Qdrant BM25 sparse search, filtered by mode
 └─► Ollama → Cypher → Neo4j (mode-specific system prompt)
          │

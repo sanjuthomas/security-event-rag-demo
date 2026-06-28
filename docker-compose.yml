@@ -5,6 +5,19 @@ x-otel-environment: &otel-environment
   OTEL_DEPLOYMENT_ENVIRONMENT: development
   OTEL_METRIC_EXPORT_INTERVAL: "15000"
 
+# Ollama model names — override in `.env` (see `.env.example`)
+x-ollama-environment: &ollama-environment
+  OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+  OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:-snowflake-arctic-embed:m}
+  OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-llama3:8b}
+
+# Single merge anchor for services that need OTel + Ollama (YAML allows only one `<<` per block)
+x-otel-ollama-environment: &otel-ollama-environment
+  <<: *otel-environment
+  OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+  OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:-snowflake-arctic-embed:m}
+  OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-llama3:8b}
+
 services:
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.96.0
@@ -241,7 +254,7 @@ services:
     ports:
       - "8090:8090"
     environment:
-      <<: *otel-environment
+      <<: *otel-ollama-environment
       OTEL_SERVICE_NAME: ssi-indexer
       KAFKA_ENABLED: "true"
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
@@ -260,10 +273,6 @@ services:
       QDRANT_URL: http://qdrant:6333
       QDRANT_COLLECTION: ssi_search_index
       QDRANT_BM25_MODEL: qdrant/bm25
-      # Host Mac Ollama (GPU) — not containerized; ETL calls out over HTTP only
-      OLLAMA_URL: http://host.docker.internal:11434
-      OLLAMA_EMBEDDING_MODEL: bge-m3:latest
-      OLLAMA_CHAT_MODEL: qwen3:30b
       OIDC_ISSUER_URL: http://localhost:8080
       OIDC_INTERNAL_URL: http://zitadel-proxy
       ZITADEL_INTERNAL_URL: http://zitadel-proxy
@@ -439,7 +448,7 @@ services:
     ports:
       - "8092:8092"
     environment:
-      <<: *otel-environment
+      <<: *otel-ollama-environment
       OTEL_SERVICE_NAME: ssi-chat
       QDRANT_URL: http://qdrant:6333
       QDRANT_COLLECTION: ssi_search_index
@@ -447,9 +456,6 @@ services:
       NEO4J_USER: neo4j
       NEO4J_PASSWORD: devpassword
       GRAPH_MODEL_DIR: /app/neo4j-graph-model
-      OLLAMA_URL: http://host.docker.internal:11434
-      OLLAMA_EMBEDDING_MODEL: bge-m3:latest
-      OLLAMA_CHAT_MODEL: qwen3:30b
       PAYMENT_SERVICE_URL: http://payment-service:8093
       INSTRUCTION_SERVICE_URL: http://instruction-service:8000
       USERS_FILE: /app/zitadel-seed/users.yaml
