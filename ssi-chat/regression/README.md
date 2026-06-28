@@ -4,6 +4,17 @@ YAML-driven regression tests for **Security Events**, **Instructions**, and **Pa
 
 Each case posts a question to `POST /api/chat` and checks the response with flexible assertions (keywords, numeric answers, minimum sources/graph rows). LLM answers are not compared verbatim — expectations use `answer_contains_any`, `answer_has_number`, etc.
 
+Each case also declares a **`retrieval`** tag — the primary engine the answer is expected to use:
+
+| `retrieval` | Meaning | Count in bank |
+|-------------|---------|---------------|
+| `deterministic` | Neo4j planned query + formatter; skips LLM synthesis | 18 |
+| `graph` | Neo4j planned or LLM Cypher is authoritative | 36 |
+| `vector` | Qdrant dense/BM25 hits drive open-ended security-event answers | 5 |
+| `eligibility` | Live OPA via authorization-service (no Qdrant) | 0 (supported in chat, not in this bank) |
+
+PolicyPilot still runs dense vector search **in parallel** for every case except `eligibility` — the tag documents where the answer should actually come from.
+
 ## Prerequisites
 
 - Full stack running (`docker compose up -d`)
@@ -40,6 +51,9 @@ python -m regression.runner --mode events
 
 # Tag filter (counts, compliance, who, why, when, …)
 python -m regression.runner --tags counts,alerts
+
+# Retrieval filter (deterministic, graph, vector, eligibility)
+python -m regression.runner --retrieval vector
 
 # Single case
 python -m regression.runner --ids events_who_approved_payment_why
@@ -111,6 +125,7 @@ Chat cases exercise RAG end-to-end; they do not call ILM/payment REST APIs direc
 ```yaml
 - id: my_new_case
   mode: events
+  retrieval: graph   # deterministic | graph | vector | eligibility
   tags: [who, approve]
   question: Who approved payment {approved_payment_id} and why?
   expect:

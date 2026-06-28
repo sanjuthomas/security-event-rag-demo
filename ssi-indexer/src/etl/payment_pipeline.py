@@ -11,13 +11,12 @@ import logging
 import uuid
 from typing import Any
 
-from etl.authorization_context import (
-    authorization_merged_fields,
-    authorization_search_parts,
-)
+from etl.authorization_context import authorization_merged_fields
 from etl.neo4j_client import Neo4jGraphWriter
 from etl.ollama_client import OllamaEmbeddingClient
 from etl.qdrant_store import QdrantHybridStore
+from etl.search_text.builder import build_search_text_from_profile
+from etl.search_text.context import payment_security_event_context
 
 logger = logging.getLogger(__name__)
 
@@ -37,70 +36,15 @@ def _roles_json(roles: list | None) -> str | None:
     return json.dumps(roles)
 
 
-def _build_payment_event_search_text(event: dict[str, Any]) -> str:
-    actor = event.get("actor") or {}
-    resource = event.get("resource") or {}
-    event_ctx = event.get("event") or {}
-    snap = event.get("payment_snapshot") or {}
-    created_by = snap.get("created_by") or {}
-    approved_by = snap.get("approved_by") or {}
-    auth_ctx = authorization_merged_fields(event)
-
-    parts = [
-        event.get("message", ""),
-        event.get("timestamp", ""),
-        event.get("severity", ""),
-        event_ctx.get("action", ""),
-        event_ctx.get("outcome", ""),
-        event_ctx.get("reason") or "",
-        *authorization_search_parts(auth_ctx),
-        actor.get("user_id", ""),
-        actor.get("given_name") or "",
-        actor.get("family_name") or "",
-        actor.get("title", ""),
-        " ".join(actor.get("roles") or []),
-        " ".join(actor.get("groups") or []),
-        " ".join(actor.get("covering_lobs") or []),
-        actor.get("lob") or "",
-        resource.get("id", ""),
-        resource.get("instruction_id", ""),
-        resource.get("owning_lob", ""),
-        resource.get("currency", ""),
-        str(resource.get("amount", "")),
-        snap.get("value_date") or "",
-        snap.get("instruction_type") or "",
-        created_by.get("user_id") or "",
-        _display(created_by),
-        approved_by.get("user_id") or "",
-        _display(approved_by),
-        "payment",
-    ]
-    return " ".join(str(p) for p in parts if p).strip()
+def build_payment_event_search_text(event: dict[str, Any]) -> str:
+    return build_search_text_from_profile(
+        "payment_security_event",
+        payment_security_event_context(event),
+    )
 
 
-def _build_payment_fact_search_text(fact: dict[str, Any]) -> str:
-    created_by = fact.get("created_by") or {}
-    approved_by = fact.get("approved_by") or {}
-    rejected_by = fact.get("rejected_by") or {}
-
-    parts = [
-        fact.get("payment_id", ""),
-        fact.get("instruction_id", ""),
-        fact.get("status", ""),
-        fact.get("currency", ""),
-        str(fact.get("amount", "")),
-        fact.get("value_date") or "",
-        fact.get("owning_lob", ""),
-        fact.get("instruction_type", ""),
-        created_by.get("user_id") or "",
-        _display(created_by),
-        approved_by.get("user_id") or "",
-        _display(approved_by),
-        rejected_by.get("user_id") or "",
-        _display(rejected_by),
-        "payment",
-    ]
-    return " ".join(str(p) for p in parts if p).strip()
+def build_payment_fact_search_text(fact: dict[str, Any]) -> str:
+    return build_search_text_from_profile("payment_fact", fact)
 
 
 class PaymentSecurityEventPipeline:
@@ -131,7 +75,7 @@ class PaymentSecurityEventPipeline:
             self.qdrant_store.ensure_collection(self.ollama_client.dimension)
             self._qdrant_ready = True
 
-        search_text = _build_payment_event_search_text(event)
+        search_text = build_payment_event_search_text(event)
         dense_vector = await self.ollama_client.embed(search_text)
 
         resource = event.get("resource") or {}
@@ -207,7 +151,7 @@ class PaymentFactPipeline:
             self.qdrant_store.ensure_collection(self.ollama_client.dimension)
             self._qdrant_ready = True
 
-        search_text = _build_payment_fact_search_text(fact)
+        search_text = build_payment_fact_search_text(fact)
         dense_vector = await self.ollama_client.embed(search_text)
 
         created_by = fact.get("created_by") or {}

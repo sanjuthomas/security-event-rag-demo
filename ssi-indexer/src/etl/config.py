@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     ollama_chat_model: str = "llama3:8b"
     ollama_timeout_seconds: float = 300.0
     search_default_limit: int = 10
+    search_profiles_dir: str | None = None
 
     @property
     def graph_schema_path(self):

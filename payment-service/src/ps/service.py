@@ -20,7 +20,9 @@ from ps.ilm_client import IlmClient, InstructionNotFoundError, InstructionStateE
 from ps.kafka_publisher import kafka_publisher
 from ps.models.api import LifecycleEvent, RejectPaymentRequest, Subject, UserReference
 from ps.models.enums import PaymentAction, PaymentStatus
+from ps.models.enums import PaymentAction
 from ps.models.payment import Payment
+from ps.models.payment_fact import PaymentFact
 from ps.repository import PaymentNotFoundError, PaymentRepository
 from ps.security_event_repository import SecurityEventRepository
 from ps.service_identity import service_identity
@@ -248,11 +250,29 @@ class PaymentService:
             payment,
             details=details,
         )
-        await self._publish_payment_fact(payment)
+        await self._publish_payment_fact(
+            action,
+            subject,
+            payment,
+            authorization=(details or {}).get("authorization"),
+        )
 
-    async def _publish_payment_fact(self, payment: Payment) -> None:
+    async def _publish_payment_fact(
+        self,
+        action: PaymentAction,
+        subject: Subject,
+        payment: Payment,
+        *,
+        authorization: dict | None = None,
+    ) -> None:
         try:
-            await kafka_publisher.publish_payment(payment.to_mongo())
+            fact = PaymentFact.from_payment(
+                action,
+                subject,
+                payment,
+                authorization=authorization,
+            )
+            await kafka_publisher.publish_payment(fact.to_kafka_value())
         except Exception:
             logger.exception(
                 "failed to publish payment fact %s to Kafka", payment.payment_id

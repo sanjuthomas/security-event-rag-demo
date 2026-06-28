@@ -16,6 +16,7 @@ RUN pip install --no-cache-dir ./shared/telemetry
 
 COPY ssi-indexer/pyproject.toml .
 COPY ssi-indexer/src ./src
+COPY ssi-indexer/search-profiles ./search-profiles
 
 RUN pip install --no-cache-dir .
 

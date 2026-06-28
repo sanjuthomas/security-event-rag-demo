@@ -1,0 +1,37 @@
+entity: payment_fact
+wired: true
+description: >
+  Payment facts (ssi-payments Kafka topic).
+
+context_root: fact
+payload_source: payment_fact
+
+includes:
+  - path: payment_id
+  - path: instruction_id
+  - path: status
+  - path: currency
+  - path: amount
+    transform: str_value
+  - path: value_date
+  - path: owning_lob
+  - path: instruction_type
+  - path: created_by.user_id
+  - path: created_by
+    transform: display_name
+  - path: approved_by.user_id
+  - path: approved_by
+    transform: display_name
+  - path: rejected_by.user_id
+  - path: rejected_by
+    transform: display_name
+  - literal: payment
+
+excludes:
+  - version_number
+  - lifecycle_events
+  - full payment document JSON
+
+join:
+  separator: " "
+  omit_empty: true

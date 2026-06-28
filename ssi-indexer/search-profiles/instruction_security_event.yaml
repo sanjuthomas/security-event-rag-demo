@@ -1,0 +1,86 @@
+entity: instruction_security_event
+wired: true
+description: >
+  Instruction security events (instruction-security-events Kafka topic).
+  context_root is the denormalized merged dict from build_merged_context().
+
+context_root: merged
+payload_source: instruction_security_event
+
+includes:
+  # --- Event narrative ---
+  - path: message
+  - path: severity
+  - path: action
+  - path: outcome
+  - path: reason
+
+  # --- Authorization (see _shared/authorization_merged.yaml) ---
+  - profile: authorization_merged
+
+  # --- Actor who performed the action ---
+  - path: actor_user_id
+  - path: actor_given_name
+  - path: actor_family_name
+  - path: actor_title
+  - path: actor_roles
+    transform: join_list
+  - path: actor_lob
+  - path: actor_supervisor_id
+
+  # --- Instruction business attributes ---
+  - path: owning_lob
+  - path: status
+  - path: instruction_type
+  - path: wire_scope
+  - path: currency
+
+  # --- Counterparty / routing (conflict detection queries) ---
+  - path: creditor_name
+  - path: creditor_account_id
+  - path: debtor_name
+  - path: debtor_account_id
+  - path: creditor_agent_bic
+
+  # --- Lifecycle parties ---
+  - path: creator_user_id
+  - path: creator_given_name
+  - path: creator_family_name
+  - path: creator_title
+  - path: creator_lob
+  - path: approver_user_id
+  - path: approver_given_name
+  - path: approver_family_name
+  - path: approver_title
+  - path: approver_lob
+  - path: rejector_user_id
+  - path: rejector_given_name
+  - path: rejector_family_name
+  - path: rejector_title
+  - path: rejector_lob
+
+  # --- Dates users ask about ---
+  - path: effective_date
+  - path: end_date
+
+# Documented for readability — still present in Qdrant payload / merged, not embedded
+excludes:
+  - event_id
+  - instruction_id
+  - version_number
+  - timestamp                    # in authorization profile only (embedded once there)
+  - actor_display
+  - creator_display
+  - approver_display
+  - rejector_display
+  - creator_supervisor_id
+  - approver_supervisor_id
+  - rejector_supervisor_id
+  - creditor_account_scheme
+  - usage_count
+  - authorization_is_alert
+  - nested ISO20022 / address / remittance JSON
+
+join:
+  separator: " "
+  omit_empty: true

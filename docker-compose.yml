@@ -278,11 +278,13 @@ services:
       ZITADEL_INTERNAL_URL: http://zitadel-api:8080
       ZITADEL_SERVICE_PAT_FILE: /zitadel/bootstrap/login-client.pat
       AUTH_MODE: jwt
+      SEARCH_PROFILES_DIR: /app/search-profiles
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - zitadel-bootstrap:/zitadel/bootstrap:ro
       - ./neo4j-graph-model:/app/neo4j-graph-model:ro
+      - ./ssi-indexer/search-profiles:/app/search-profiles:ro
     depends_on:
       kafka-init:
         condition: service_completed_successfully

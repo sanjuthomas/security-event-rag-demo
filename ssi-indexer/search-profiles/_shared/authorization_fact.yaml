@@ -1,0 +1,9 @@
+# Reusable authorization block for instruction facts (authorization_merged_from_fact shape).
+
+fields:
+  - path: authorization_summary
+  - path: authorization_decision
+  - path: authorization_basis
+    transform: join_list
+  - path: authorization_violations
+    transform: join_list

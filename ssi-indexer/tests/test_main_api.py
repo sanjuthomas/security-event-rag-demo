@@ -111,6 +111,31 @@ def test_stats_endpoint(client):
     assert stats["components"]["kafka"]["ok"] is False
 
 
+def test_search_profiles_list(client):
+    test_client, _, _, _ = client
+    response = test_client.get("/api/search-profiles")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["count"] == 4
+    assert all(profile["wired"] for profile in body["profiles"])
+
+
+def test_search_profile_detail(client):
+    test_client, _, _, _ = client
+    response = test_client.get("/api/search-profiles/payment_fact")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["entity"] == "payment_fact"
+    assert body["wired"] is True
+    assert any(item.get("path") == "payment_id" for item in body["includes"])
+
+
+def test_search_profile_detail_not_found(client):
+    test_client, _, _, _ = client
+    response = test_client.get("/api/search-profiles/not-an-entity")
+    assert response.status_code == 404
+
+
 def test_vector_chunk_stats(client):
     test_client, _, _, mock_qdrant = client
     mock_qdrant.search_text_chunk_stats.return_value = {
@@ -134,6 +159,7 @@ def test_vector_chunk_stats(client):
     assert body["indexing_model"] == "one_point_per_record"
     assert body["indexing_notes"]["chunking"].startswith("none")
     assert body["embedding_context_tokens"] == 32768
+    assert len(body["search_profiles"]) == 4
     assert len(body["top_chunks"]) == 1
 
 

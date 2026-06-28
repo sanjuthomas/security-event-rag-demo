@@ -54,6 +54,7 @@ def filter_cases(
     mode: str | None,
     tags: set[str] | None,
     case_ids: set[str] | None,
+    retrieval: set[str] | None,
 ) -> list[RegressionCase]:
     selected = cases
     if mode and mode != "all":
@@ -62,6 +63,8 @@ def filter_cases(
         selected = [case for case in selected if tags.intersection(case.tags)]
     if case_ids:
         selected = [case for case in selected if case.id in case_ids]
+    if retrieval:
+        selected = [case for case in selected if case.retrieval in retrieval]
     return selected
 
 
@@ -103,6 +106,7 @@ def run_case(
                 skipped=True,
                 reason=f"missing context key: {exc.args[0]}",
                 tags=case.tags,
+                retrieval=case.retrieval,
             )
         return CaseResult(
             id=case.id,
@@ -111,6 +115,7 @@ def run_case(
             passed=False,
             reason=f"missing context key: {exc.args[0]}",
             tags=case.tags,
+            retrieval=case.retrieval,
         )
 
     for key in case.expect.requires_context:
@@ -124,6 +129,7 @@ def run_case(
                     skipped=True,
                     reason=f"missing required context: {key}",
                     tags=case.tags,
+                    retrieval=case.retrieval,
                 )
             return CaseResult(
                 id=case.id,
@@ -132,6 +138,7 @@ def run_case(
                 passed=False,
                 reason=f"missing required context: {key}",
                 tags=case.tags,
+                retrieval=case.retrieval,
             )
 
     try:
@@ -144,6 +151,7 @@ def run_case(
             passed=False,
             reason=f"chat request failed: {exc}",
             tags=case.tags,
+            retrieval=case.retrieval,
         )
 
     answer = payload.get("answer") or ""
@@ -173,6 +181,7 @@ def run_case(
         retrieval_ms=payload.get("retrieval_ms"),
         generation_ms=payload.get("generation_ms"),
         tags=case.tags,
+        retrieval=case.retrieval,
     )
 
 
@@ -181,7 +190,8 @@ def print_summary(result: SuiteResult) -> None:
     print(f"passed={result.passed} failed={result.failed} skipped={result.skipped}")
     for case in result.cases:
         status = "PASS" if case.passed else ("SKIP" if case.skipped else "FAIL")
-        print(f"[{status}] {case.id} ({case.mode})")
+        retrieval = f" retrieval={case.retrieval}" if case.retrieval else ""
+        print(f"[{status}] {case.id} ({case.mode}{retrieval})")
         if not case.passed:
             print(f"       reason: {case.reason}")
             if case.answer_preview:
@@ -201,6 +211,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--qdrant-collection", default="ssi_search_index")
     parser.add_argument("--mode", choices=["events", "instructions", "payments", "all"], default="all")
     parser.add_argument("--tags", default="", help="Comma-separated tag filter")
+    parser.add_argument(
+        "--retrieval",
+        default="",
+        help="Comma-separated retrieval filter: deterministic, graph, vector, eligibility",
+    )
     parser.add_argument("--ids", default="", help="Comma-separated case id filter")
     parser.add_argument("--seed", action="store_true", help="Run harness seed steps before tests")
     parser.add_argument("--no-wait", action="store_true", help="Skip waiting for ETL index after seed")
@@ -225,8 +240,15 @@ def main(argv: list[str] | None = None) -> int:
 
     suite = load_suite(args.questions)
     tag_filter = {tag.strip() for tag in args.tags.split(",") if tag.strip()} or None
+    retrieval_filter = {item.strip() for item in args.retrieval.split(",") if item.strip()} or None
     id_filter = {item.strip() for item in args.ids.split(",") if item.strip()} or None
-    cases = filter_cases(suite.cases, mode=args.mode, tags=tag_filter, case_ids=id_filter)
+    cases = filter_cases(
+        suite.cases,
+        mode=args.mode,
+        tags=tag_filter,
+        case_ids=id_filter,
+        retrieval=retrieval_filter,
+    )
 
     if args.seed and suite.seed.steps:
         logger.info("running %s seed step(s)", len(suite.seed.steps))

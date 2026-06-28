@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 
 from inst.models.api import Subject
 from inst.models.enums import LifecycleAction
+from inst.models.fact_validation import validate_instruction_snapshot
 from inst.models.instruction import CashSettlementInstruction
 
 
@@ -54,6 +55,12 @@ class InstructionFact(BaseModel):
         version_number: int,
         authorization: dict[str, Any] | None = None,
     ) -> "InstructionFact":
+        snapshot = instruction.model_dump(mode="json")
+        validate_instruction_snapshot(
+            snapshot,
+            action=action.value,
+            version_number=version_number,
+        )
         return cls(
             instruction_id=instruction.instruction_id,
             version_number=version_number,
@@ -65,6 +72,6 @@ class InstructionFact(BaseModel):
             actor_lob=subject.lob,
             actor_roles=subject.roles,
             actor_supervisor_id=subject.supervisor_id,
-            instruction_snapshot=instruction.model_dump(mode="json"),
+            instruction_snapshot=snapshot,
             authorization=authorization,
         )

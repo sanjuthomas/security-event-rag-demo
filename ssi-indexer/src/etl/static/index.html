@@ -72,6 +72,28 @@
       </div>
     </section>
 
+    <section class="panel search-profiles-panel" aria-label="Search text profiles">
+      <div class="chunk-stats-header">
+        <div>
+          <h2>Search text profiles</h2>
+          <p class="panel-intro">
+            Fields listed here are flattened into <code>search_text</code> for dense embedding and
+            BM25. Everything else stays in the Qdrant payload only — browse full JSON in search
+            results below.
+          </p>
+        </div>
+        <button type="button" id="search-profiles-refresh-btn" class="btn btn-ghost">Refresh</button>
+      </div>
+
+      <div id="search-profiles-empty" class="empty-state muted">
+        Sign in to load search profile definitions.
+      </div>
+
+      <div id="search-profiles-content" class="hidden">
+        <div id="search-profiles-list" class="search-profiles-list"></div>
+      </div>
+    </section>
+
     <main class="layout">
       <section class="panel search-panel">
         <div class="mode-tabs" role="tablist" aria-label="Search mode">

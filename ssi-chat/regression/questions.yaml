@@ -1,466 +1,864 @@
-version: 1
+# PolicyPilot regression question bank.
+#
+# retrieval — primary engine expected to produce the answer:
+#   deterministic  Neo4j planned query + formatter (skips LLM synthesis)
+#   graph          Neo4j planned or LLM Cypher is authoritative (vector runs but de-prioritized)
+#   vector         Qdrant dense/BM25 hits are primary for open-ended event-log questions
+#   eligibility    Live OPA via authorization-service (no case in this bank yet)
+#
+# Note: PolicyPilot still invokes dense vector search in parallel for all cases except eligibility.
 
+version: 1
 seed:
   steps:
-    - action: run-policy-scenario
-    - action: run-payment-policy-scenario
-    - action: create-instructions
-      count: 5
-    - action: submit-instructions
-      count: 5
-    - action: approve-instructions
-      count: 3
-    - action: create-payments
-      count: 4
-    - action: submit-payments
-      count: 4
-    - action: approve-payments
-      count: 2
-    - action: reject-payments
-      count: 1
+  - action: run-policy-scenario
+  - action: run-payment-policy-scenario
+  - action: create-instructions
+    count: 5
+  - action: submit-instructions
+    count: 5
+  - action: approve-instructions
+    count: 3
+  - action: create-payments
+    count: 4
+  - action: submit-payments
+    count: 4
+  - action: approve-payments
+    count: 2
+  - action: reject-payments
+    count: 1
   wait:
     min_security_events: 10
     min_qdrant_points: 15
     timeout_seconds: 300
     poll_interval_seconds: 4
-
 cases:
-  # ── Security Events ─────────────────────────────────────────────────────────
-  - id: events_alerts_today
-    mode: events
-    tags: [counts, alerts, today]
-    question: How many ALERT events happened today?
-    expect:
-      answer_has_number: true
-      min_answer_length: 5
-
-  - id: events_instruction_denials_week
-    mode: events
-    tags: [counts, alerts, instructions]
-    question: How many instruction policy denials happened this week?
-    expect:
-      answer_has_number: true
-
-  - id: events_payment_denials_today
-    mode: events
-    tags: [counts, alerts, payments, today]
-    question: How many payment policy denial alerts happened today?
-    expect:
-      answer_has_number: true
-
-  - id: events_top_denial_user_week
-    mode: events
-    tags: [ranking, alerts]
-    question: Which user triggered the most policy denial alerts this week?
-    expect:
-      min_answer_length: 10
-      answer_contains_any: ["alert", "denial", "user", "no", "0"]
-
-  - id: events_approve_success_vs_fail_today
-    mode: events
-    tags: [counts, approve]
-    question: How many APPROVE events succeeded today vs failed?
-    expect:
-      answer_has_number: true
-
-  - id: events_create_payment_logged_today
-    mode: events
-    tags: [counts, payments, today]
-    question: How many CREATE_PAYMENT events were logged today?
-    expect:
-      answer_has_number: true
-
-  - id: events_who_approved_payment_why
-    mode: events
-    tags: [who, why, when, payments, approve]
-    question: Who approved payment {approved_payment_id} and why were they allowed?
-    expect:
-      requires_context: [approved_payment_id]
-      min_answer_length: 40
-      answer_contains_any: ["allowed", "approve", "because", "role", "funding"]
-
-  - id: events_when_instruction_approved_why
-    mode: events
-    tags: [who, why, when, instructions, approve]
-    question: When was instruction {approved_instruction_id} approved, and what was the authorization basis?
-    expect:
-      requires_context: [approved_instruction_id]
-      min_answer_length: 30
-      answer_contains_any: ["approv", "allowed", "because", "role", "basis", "authorization"]
-
-  - id: events_payment_denial_why
-    mode: events
-    tags: [deny, payments, why]
-    question: Show payment policy denial ALERT events today with actor and reason.
-    expect:
-      min_answer_length: 10
-      answer_contains_any: ["alert", "denied", "denial", "no", "0", "payment"]
-
-  - id: events_approve_payment_ficc_week
-    mode: events
-    tags: [approve, payments, ficc, when, why]
-    question: List payment approval events for FICC this week with who, when, and why.
-    expect:
-      min_answer_length: 10
-      answer_contains_any: ["ficc", "approv", "payment", "no", "0"]
-
-  - id: events_self_approval_instruction
-    mode: events
-    tags: [compliance, self-approval, instructions]
-    question: Show all self-approval attempts on instructions (APPROVE where actor is the creator).
-    expect:
-      min_answer_length: 10
-      answer_contains_any: ["self", "creator", "approv", "no", "0", "none"]
-
-  - id: events_payment_self_approval_today
-    mode: events
-    tags: [compliance, self-approval, payments, today]
-    question: Were there any payment self-approval attempts today?
-    expect:
-      answer_contains_any: ["self", "approv", "payment", "no", "0", "none", "not"]
-
-  - id: events_lob_coverage_denials
-    mode: events
-    tags: [compliance, payments, lob]
-    question: Show ALERT events for LOB coverage violations on payments.
-    expect:
-      answer_contains_any: ["lob", "coverage", "alert", "no", "0", "denied"]
-
-  - id: events_unapproved_instruction_use
-    mode: events
-    tags: [compliance, payments]
-    question: Any attempts to approve using an unapproved or expired instruction?
-    expect:
-      answer_contains_any: ["unapproved", "expired", "instruction", "no", "0", "none", "not"]
-
-  - id: events_instruction_timeline
-    mode: events
-    tags: [timeline, instructions]
-    question: What is the full security event timeline for instruction {approved_instruction_id}?
-    expect:
-      requires_context: [approved_instruction_id]
-      min_answer_length: 20
-      answer_contains_any: ["event", "create", "submit", "approv", "instruction"]
-
-  - id: events_payment_timeline
-    mode: events
-    tags: [timeline, payments]
-    question: What happened on payment {approved_payment_id} from creation through approval?
-    expect:
-      requires_context: [approved_payment_id]
-      min_answer_length: 20
-      answer_contains_any: ["payment", "create", "submit", "approv"]
-
-  - id: events_user_ficc300_today
-    mode: events
-    tags: [timeline, today]
-    question: List all events for user ficc-300 today in chronological order.
-    expect:
-      min_answer_length: 10
-      answer_contains_any: ["ficc-300", "event", "no", "0", "today"]
-
-  - id: events_reject_week
-    mode: events
-    tags: [reject]
-    question: Show all REJECT events this week with the rejection reason.
-    expect:
-      answer_contains_any: ["reject", "reason", "no", "0", "event"]
-
-  - id: events_ficc_alerts_today
-    mode: events
-    tags: [alerts, ficc, today]
-    question: Show all ALERT events for LOB FICC today.
-    expect:
-      answer_contains_any: ["ficc", "alert", "no", "0", "event"]
-
-  - id: events_submit_payment_fx_today
-    mode: events
-    tags: [payments, fx, today]
-    question: How many SUBMIT_PAYMENT events happened today for FX?
-    expect:
-      answer_has_number: true
-
-  # ── Instructions ──────────────────────────────────────────────────────────────
-  - id: instructions_created_today
-    mode: instructions
-    tags: [counts, today]
-    question: How many instructions were created today?
-    expect:
-      answer_has_number: true
-
-  - id: instructions_standing_ficc
-    mode: instructions
-    tags: [counts, ficc, standing]
-    question: How many STANDING instructions are there for LOB FICC?
-    expect:
-      answer_has_number: true
-
-  - id: instructions_pending_approval
-    mode: instructions
-    tags: [counts, pending]
-    question: How many instructions are in PENDING_APPROVAL?
-    expect:
-      answer_has_number: true
-
-  - id: instructions_single_use
-    mode: instructions
-    tags: [inventory]
-    question: List all SINGLE_USE instructions.
-    expect:
-      min_answer_length: 10
-      answer_contains_any: ["single", "instruction", "no", "0"]
-
-  - id: instructions_per_lob
-    mode: instructions
-    tags: [counts, lob]
-    question: How many instructions exist per LOB?
-    expect:
-      answer_has_number: true
-
-  - id: instructions_who_approved
-    mode: instructions
-    tags: [who, approve]
-    question: Who approved instruction {approved_instruction_id}?
-    expect:
-      requires_context: [approved_instruction_id]
-      min_answer_length: 15
-      answer_contains_any: ["approv", "ficc", "fx", "mo-", "torres", "vasquez", "user"]
-
-  - id: instructions_creator_and_approver
-    mode: instructions
-    tags: [who]
-    question: Who created instruction {approved_instruction_id} and who approved it?
-    expect:
-      requires_context: [approved_instruction_id]
-      min_answer_length: 20
-      answer_contains_any: ["creat", "approv"]
-
-  - id: instructions_approved_by_ficc300
-    mode: instructions
-    tags: [who]
-    question: List all instructions approved by Elena Vasquez (ficc-300).
-    expect:
-      answer_contains_any: ["ficc-300", "vasquez", "instruction", "no", "0", "approv"]
-
-  - id: instructions_created_by_mo100
-    mode: instructions
-    tags: [who]
-    question: Which instructions did mo-100 create?
-    expect:
-      answer_contains_any: ["mo-100", "instruction", "creat", "no", "0", "chen"]
-
-  - id: instructions_subordinate_approver
-    mode: instructions
-    tags: [compliance, hierarchy]
-    question: Are there any instructions approved by someone who directly reports to the creator?
-    expect:
-      answer_contains_any: ["report", "creator", "approv", "no", "0", "none", "not", "subordinate"]
-
-  - id: instructions_mutual_approval
-    mode: instructions
-    tags: [compliance]
-    question: Are there any mutual approval cases (A approved B's instruction and B approved A's)?
-    expect:
-      answer_contains_any: ["mutual", "approv", "no", "0", "none", "not"]
-
-  - id: instructions_self_approval
-    mode: instructions
-    tags: [compliance, self-approval]
-    question: Show instructions where creator and approver are the same person.
-    expect:
-      answer_contains_any: ["self", "creator", "approv", "same", "no", "0", "none"]
-
-  - id: instructions_supervisor_is_creator
-    mode: instructions
-    tags: [compliance, hierarchy]
-    question: List instructions where the approver's supervisor is the creator.
-    expect:
-      answer_contains_any: ["supervisor", "creator", "approv", "no", "0", "none", "report"]
-
-  - id: instructions_duplicate_routes
-    mode: instructions
-    tags: [conflicts, compliance]
-    question: Are there active instructions sharing the same creditor account and currency?
-    expect:
-      answer_contains_any: ["creditor", "account", "currency", "conflict", "duplicate", "no", "0", "none"]
-
-  - id: instructions_conflicts_ficc
-    mode: instructions
-    tags: [conflicts, ficc]
-    question: Show all CONFLICTS_WITH duplicate settlement routes for FICC.
-    expect:
-      answer_contains_any: ["conflict", "ficc", "creditor", "duplicate", "no", "0", "none"]
-
-  - id: instructions_expired
-    mode: instructions
-    tags: [expiry]
-    question: Which STANDING instructions have expired (end date in the past)?
-    expect:
-      answer_contains_any: ["expir", "end", "standing", "no", "0", "none"]
-
-  - id: instructions_expiring_soon_fx
-    mode: instructions
-    tags: [expiry, fx]
-    question: List instructions expiring in the next 30 days for LOB FX.
-    expect:
-      answer_contains_any: ["expir", "fx", "end", "no", "0", "none", "instruction"]
-
-  - id: instructions_standing_ficc
-    mode: instructions
-    tags: [inventory, ficc]
-    question: Show all STANDING instructions for LOB FICC.
-    expect:
-      answer_contains_any: ["standing", "ficc", "instruction", "no", "0"]
-
-  - id: instructions_pending_list
-    mode: instructions
-    tags: [inventory, pending]
-    question: List all PENDING_APPROVAL instructions.
-    expect:
-      answer_contains_any: ["pending", "instruction", "no", "0"]
-
-  # ── Payments ──────────────────────────────────────────────────────────────────
-  - id: payments_approved_ficc_today
-    mode: payments
-    tags: [counts, ficc, today, approve]
-    question: How many payments were approved today for FICC?
-    expect:
-      answer_has_number: true
-
-  - id: payments_submitted_count
-    mode: payments
-    tags: [counts, submitted]
-    question: How many payments are in SUBMITTED status?
-    expect:
-      answer_has_number: true
-
-  - id: payments_created_week
-    mode: payments
-    tags: [counts]
-    question: How many payments were created this week?
-    expect:
-      answer_has_number: true
-
-  - id: payments_total_approved_ficc_today
-    mode: payments
-    tags: [counts, ficc, totals, today]
-    question: What is the total approved payment amount for FICC today?
-    expect:
-      answer_has_number: true
-
-  - id: payments_rejected_week
-    mode: payments
-    tags: [counts, reject]
-    question: How many payments were rejected this week?
-    expect:
-      answer_has_number: true
-
-  - id: payments_who_approved
-    mode: payments
-    tags: [who, approve]
-    question: Who approved payment {approved_payment_id}?
-    expect:
-      requires_context: [approved_payment_id]
-      min_answer_length: 10
-      answer_contains_any: ["approv", "pay-", "laurent", "user"]
-
-  - id: payments_approved_by_pay201_week
-    mode: payments
-    tags: [who]
-    question: Show payments approved by Sophie Laurent (pay-201) this week with amounts.
-    expect:
-      answer_contains_any: ["pay-201", "laurent", "payment", "amount", "no", "0", "approv"]
-
-  - id: payments_creator_and_approver
-    mode: payments
-    tags: [who]
-    question: Who created payment {approved_payment_id} and who approved it?
-    expect:
-      requires_context: [approved_payment_id]
-      min_answer_length: 15
-      answer_contains_any: ["creat", "approv"]
-
-  - id: payments_for_instruction
-    mode: payments
-    tags: [instruction]
-    question: List all APPROVED payments for instruction {approved_payment_instruction_id}.
-    expect:
-      requires_context: [approved_payment_instruction_id]
-      answer_contains_any: ["payment", "approv", "instruction", "no", "0"]
-
-  - id: payments_over_10m_week
-    mode: payments
-    tags: [amounts]
-    question: Show payments over $10M approved this week.
-    expect:
-      answer_contains_any: ["payment", "10", "million", "approv", "no", "0", "amount"]
-
-  - id: payments_over_100m
-    mode: payments
-    tags: [amounts]
-    question: List payments exceeding $100M.
-    expect:
-      answer_contains_any: ["payment", "100", "million", "no", "0", "amount"]
-
-  - id: payments_largest_week_by_lob
-    mode: payments
-    tags: [amounts, ranking]
-    question: What are the largest approved payments this week by LOB?
-    expect:
-      answer_contains_any: ["payment", "largest", "lob", "amount", "no", "0"]
-
-  - id: payments_draft_fx
-    mode: payments
-    tags: [status, fx]
-    question: List all DRAFT payments for LOB FX.
-    expect:
-      answer_contains_any: ["draft", "fx", "payment", "no", "0"]
-
-  - id: payments_submitted_waiting
-    mode: payments
-    tags: [status, submitted]
-    question: Which payments are still SUBMITTED and waiting for approval?
-    expect:
-      answer_contains_any: ["submitted", "payment", "approv", "wait", "no", "0"]
-
-  - id: payments_self_approval
-    mode: payments
-    tags: [compliance, self-approval]
-    question: Show payments where the creator also approved (self-approval).
-    expect:
-      answer_contains_any: ["self", "creator", "approv", "same", "no", "0", "none"]
-
-  - id: payments_subordinate_approver
-    mode: payments
-    tags: [compliance, hierarchy]
-    question: List payments where the approver directly reports to the creator.
-    expect:
-      answer_contains_any: ["report", "creator", "approv", "subordinate", "no", "0", "none"]
-
-  - id: payments_lob_coverage_mismatch
-    mode: payments
-    tags: [compliance, lob]
-    question: Show APPROVED payments where approver covers FX but payment LOB is FICC.
-    expect:
-      answer_contains_any: ["ficc", "fx", "lob", "cover", "approv", "no", "0", "none"]
-
-  - id: payments_desk_rates
-    mode: payments
-    tags: [lob, desk]
-    question: List all payments for desk LOB DESK_RATES.
-    expect:
-      answer_contains_any: ["desk", "rates", "payment", "no", "0"]
-
-  - id: payments_fo_ficc101
-    mode: payments
-    tags: [who, front-office]
-    question: Show payments submitted by front-office user fo-ficc-101.
-    expect:
-      answer_contains_any: ["fo-ficc-101", "submit", "payment", "no", "0", "morrison"]
-
-  - id: payments_mo_ficc_week
-    mode: payments
-    tags: [who, ficc]
-    question: How many payments were created by middle office for FICC this week?
-    expect:
-      answer_has_number: true
+- id: events_alerts_today
+  mode: events
+  retrieval: graph
+  tags:
+  - counts
+  - alerts
+  - today
+  question: How many ALERT events happened today?
+  expect:
+    answer_has_number: true
+    min_answer_length: 5
+- id: events_instruction_denials_week
+  mode: events
+  retrieval: graph
+  tags:
+  - counts
+  - alerts
+  - instructions
+  question: How many instruction policy denials happened this week?
+  expect:
+    answer_has_number: true
+- id: events_payment_denials_today
+  mode: events
+  retrieval: graph
+  tags:
+  - counts
+  - alerts
+  - payments
+  - today
+  question: How many payment policy denial alerts happened today?
+  expect:
+    answer_has_number: true
+- id: events_top_denial_user_week
+  mode: events
+  retrieval: deterministic
+  tags:
+  - ranking
+  - alerts
+  question: Which user triggered the most policy denial alerts this week?
+  expect:
+    min_answer_length: 10
+    answer_contains_any:
+    - alert
+    - denial
+    - user
+    - 'no'
+    - '0'
+- id: events_approve_success_vs_fail_today
+  mode: events
+  retrieval: graph
+  tags:
+  - counts
+  - approve
+  question: How many APPROVE events succeeded today vs failed?
+  expect:
+    answer_has_number: true
+- id: events_create_payment_logged_today
+  mode: events
+  retrieval: graph
+  tags:
+  - counts
+  - payments
+  - today
+  question: How many CREATE_PAYMENT events were logged today?
+  expect:
+    answer_has_number: true
+- id: events_who_approved_payment_why
+  mode: events
+  retrieval: deterministic
+  tags:
+  - who
+  - why
+  - when
+  - payments
+  - approve
+  question: Who approved payment {approved_payment_id} and why were they allowed?
+  expect:
+    requires_context:
+    - approved_payment_id
+    min_answer_length: 40
+    answer_contains_any:
+    - allowed
+    - approve
+    - because
+    - role
+    - funding
+- id: events_when_instruction_approved_why
+  mode: events
+  retrieval: deterministic
+  tags:
+  - who
+  - why
+  - when
+  - instructions
+  - approve
+  question: When was instruction {approved_instruction_id} approved, and what was
+    the authorization basis?
+  expect:
+    requires_context:
+    - approved_instruction_id
+    min_answer_length: 30
+    answer_contains_any:
+    - approv
+    - allowed
+    - because
+    - role
+    - basis
+    - authorization
+- id: events_payment_denial_why
+  mode: events
+  retrieval: vector
+  tags:
+  - deny
+  - payments
+  - why
+  question: Show payment policy denial ALERT events today with actor and reason.
+  expect:
+    min_answer_length: 10
+    answer_contains_any:
+    - alert
+    - denied
+    - denial
+    - 'no'
+    - '0'
+    - payment
+- id: events_approve_payment_ficc_week
+  mode: events
+  retrieval: vector
+  tags:
+  - approve
+  - payments
+  - ficc
+  - when
+  - why
+  question: List payment approval events for FICC this week with who, when, and why.
+  expect:
+    min_answer_length: 10
+    answer_contains_any:
+    - ficc
+    - approv
+    - payment
+    - 'no'
+    - '0'
+- id: events_self_approval_instruction
+  mode: events
+  retrieval: graph
+  tags:
+  - compliance
+  - self-approval
+  - instructions
+  question: Show all self-approval attempts on instructions (APPROVE where actor is
+    the creator).
+  expect:
+    min_answer_length: 10
+    answer_contains_any:
+    - self
+    - creator
+    - approv
+    - 'no'
+    - '0'
+    - none
+- id: events_payment_self_approval_today
+  mode: events
+  retrieval: graph
+  tags:
+  - compliance
+  - self-approval
+  - payments
+  - today
+  question: Were there any payment self-approval attempts today?
+  expect:
+    answer_contains_any:
+    - self
+    - approv
+    - payment
+    - 'no'
+    - '0'
+    - none
+    - not
+- id: events_lob_coverage_denials
+  mode: events
+  retrieval: vector
+  tags:
+  - compliance
+  - payments
+  - lob
+  question: Show ALERT events for LOB coverage violations on payments.
+  expect:
+    answer_contains_any:
+    - lob
+    - coverage
+    - alert
+    - 'no'
+    - '0'
+    - denied
+- id: events_unapproved_instruction_use
+  mode: events
+  retrieval: graph
+  tags:
+  - compliance
+  - payments
+  question: Any attempts to approve using an unapproved or expired instruction?
+  expect:
+    answer_contains_any:
+    - unapproved
+    - expired
+    - instruction
+    - 'no'
+    - '0'
+    - none
+    - not
+- id: events_instruction_timeline
+  mode: events
+  retrieval: graph
+  tags:
+  - timeline
+  - instructions
+  question: What is the full security event timeline for instruction {approved_instruction_id}?
+  expect:
+    requires_context:
+    - approved_instruction_id
+    min_answer_length: 20
+    answer_contains_any:
+    - event
+    - create
+    - submit
+    - approv
+    - instruction
+- id: events_payment_timeline
+  mode: events
+  retrieval: graph
+  tags:
+  - timeline
+  - payments
+  question: What happened on payment {approved_payment_id} from creation through approval?
+  expect:
+    requires_context:
+    - approved_payment_id
+    min_answer_length: 20
+    answer_contains_any:
+    - payment
+    - create
+    - submit
+    - approv
+- id: events_user_ficc300_today
+  mode: events
+  retrieval: graph
+  tags:
+  - timeline
+  - today
+  question: List all events for user ficc-300 today in chronological order.
+  expect:
+    min_answer_length: 10
+    answer_contains_any:
+    - ficc-300
+    - event
+    - 'no'
+    - '0'
+    - today
+- id: events_reject_week
+  mode: events
+  retrieval: vector
+  tags:
+  - reject
+  question: Show all REJECT events this week with the rejection reason.
+  expect:
+    answer_contains_any:
+    - reject
+    - reason
+    - 'no'
+    - '0'
+    - event
+- id: events_ficc_alerts_today
+  mode: events
+  retrieval: vector
+  tags:
+  - alerts
+  - ficc
+  - today
+  question: Show all ALERT events for LOB FICC today.
+  expect:
+    answer_contains_any:
+    - ficc
+    - alert
+    - 'no'
+    - '0'
+    - event
+- id: events_submit_payment_fx_today
+  mode: events
+  retrieval: graph
+  tags:
+  - payments
+  - fx
+  - today
+  question: How many SUBMIT_PAYMENT events happened today for FX?
+  expect:
+    answer_has_number: true
+- id: instructions_created_today
+  mode: instructions
+  retrieval: deterministic
+  tags:
+  - counts
+  - today
+  question: How many instructions were created today?
+  expect:
+    answer_has_number: true
+- id: instructions_standing_ficc
+  mode: instructions
+  retrieval: deterministic
+  tags:
+  - counts
+  - ficc
+  - standing
+  question: How many STANDING instructions are there for LOB FICC?
+  expect:
+    answer_has_number: true
+- id: instructions_pending_approval
+  mode: instructions
+  retrieval: deterministic
+  tags:
+  - counts
+  - pending
+  question: How many instructions are in PENDING_APPROVAL?
+  expect:
+    answer_has_number: true
+- id: instructions_single_use
+  mode: instructions
+  retrieval: graph
+  tags:
+  - inventory
+  question: List all SINGLE_USE instructions.
+  expect:
+    min_answer_length: 10
+    answer_contains_any:
+    - single
+    - instruction
+    - 'no'
+    - '0'
+- id: instructions_per_lob
+  mode: instructions
+  retrieval: deterministic
+  tags:
+  - counts
+  - lob
+  question: How many instructions exist per LOB?
+  expect:
+    answer_has_number: true
+- id: instructions_who_approved
+  mode: instructions
+  retrieval: deterministic
+  tags:
+  - who
+  - approve
+  question: Who approved instruction {approved_instruction_id}?
+  expect:
+    requires_context:
+    - approved_instruction_id
+    min_answer_length: 15
+    answer_contains_any:
+    - approv
+    - ficc
+    - fx
+    - mo-
+    - torres
+    - vasquez
+    - user
+- id: instructions_creator_and_approver
+  mode: instructions
+  retrieval: deterministic
+  tags:
+  - who
+  question: Who created instruction {approved_instruction_id} and who approved it?
+  expect:
+    requires_context:
+    - approved_instruction_id
+    min_answer_length: 20
+    answer_contains_any:
+    - creat
+    - approv
+- id: instructions_approved_by_ficc300
+  mode: instructions
+  retrieval: graph
+  tags:
+  - who
+  question: List all instructions approved by Elena Vasquez (ficc-300).
+  expect:
+    answer_contains_any:
+    - ficc-300
+    - vasquez
+    - instruction
+    - 'no'
+    - '0'
+    - approv
+- id: instructions_created_by_mo100
+  mode: instructions
+  retrieval: graph
+  tags:
+  - who
+  question: Which instructions did mo-100 create?
+  expect:
+    answer_contains_any:
+    - mo-100
+    - instruction
+    - creat
+    - 'no'
+    - '0'
+    - chen
+- id: instructions_subordinate_approver
+  mode: instructions
+  retrieval: graph
+  tags:
+  - compliance
+  - hierarchy
+  question: Are there any instructions approved by someone who directly reports to
+    the creator?
+  expect:
+    answer_contains_any:
+    - report
+    - creator
+    - approv
+    - 'no'
+    - '0'
+    - none
+    - not
+    - subordinate
+- id: instructions_mutual_approval
+  mode: instructions
+  retrieval: graph
+  tags:
+  - compliance
+  question: Are there any mutual approval cases (A approved B's instruction and B
+    approved A's)?
+  expect:
+    answer_contains_any:
+    - mutual
+    - approv
+    - 'no'
+    - '0'
+    - none
+    - not
+- id: instructions_self_approval
+  mode: instructions
+  retrieval: graph
+  tags:
+  - compliance
+  - self-approval
+  question: Show instructions where creator and approver are the same person.
+  expect:
+    answer_contains_any:
+    - self
+    - creator
+    - approv
+    - same
+    - 'no'
+    - '0'
+    - none
+- id: instructions_supervisor_is_creator
+  mode: instructions
+  retrieval: graph
+  tags:
+  - compliance
+  - hierarchy
+  question: List instructions where the approver's supervisor is the creator.
+  expect:
+    answer_contains_any:
+    - supervisor
+    - creator
+    - approv
+    - 'no'
+    - '0'
+    - none
+    - report
+- id: instructions_duplicate_routes
+  mode: instructions
+  retrieval: graph
+  tags:
+  - conflicts
+  - compliance
+  question: Are there active instructions sharing the same creditor account and currency?
+  expect:
+    answer_contains_any:
+    - creditor
+    - account
+    - currency
+    - conflict
+    - duplicate
+    - 'no'
+    - '0'
+    - none
+- id: instructions_conflicts_ficc
+  mode: instructions
+  retrieval: graph
+  tags:
+  - conflicts
+  - ficc
+  question: Show all CONFLICTS_WITH duplicate settlement routes for FICC.
+  expect:
+    answer_contains_any:
+    - conflict
+    - ficc
+    - creditor
+    - duplicate
+    - 'no'
+    - '0'
+    - none
+- id: instructions_expired
+  mode: instructions
+  retrieval: graph
+  tags:
+  - expiry
+  question: Which STANDING instructions have expired (end date in the past)?
+  expect:
+    answer_contains_any:
+    - expir
+    - end
+    - standing
+    - 'no'
+    - '0'
+    - none
+- id: instructions_expiring_soon_fx
+  mode: instructions
+  retrieval: graph
+  tags:
+  - expiry
+  - fx
+  question: List instructions expiring in the next 30 days for LOB FX.
+  expect:
+    answer_contains_any:
+    - expir
+    - fx
+    - end
+    - 'no'
+    - '0'
+    - none
+    - instruction
+- id: instructions_standing_ficc_list
+  mode: instructions
+  retrieval: graph
+  tags:
+  - inventory
+  - ficc
+  question: Show all STANDING instructions for LOB FICC.
+  expect:
+    answer_contains_any:
+    - standing
+    - ficc
+    - instruction
+    - 'no'
+    - '0'
+- id: instructions_pending_list
+  mode: instructions
+  retrieval: graph
+  tags:
+  - inventory
+  - pending
+  question: List all PENDING_APPROVAL instructions.
+  expect:
+    answer_contains_any:
+    - pending
+    - instruction
+    - 'no'
+    - '0'
+- id: payments_approved_ficc_today
+  mode: payments
+  retrieval: deterministic
+  tags:
+  - counts
+  - ficc
+  - today
+  - approve
+  question: How many payments were approved today for FICC?
+  expect:
+    answer_has_number: true
+- id: payments_submitted_count
+  mode: payments
+  retrieval: deterministic
+  tags:
+  - counts
+  - submitted
+  question: How many payments are in SUBMITTED status?
+  expect:
+    answer_has_number: true
+- id: payments_created_week
+  mode: payments
+  retrieval: deterministic
+  tags:
+  - counts
+  question: How many payments were created this week?
+  expect:
+    answer_has_number: true
+- id: payments_total_approved_ficc_today
+  mode: payments
+  retrieval: deterministic
+  tags:
+  - counts
+  - ficc
+  - totals
+  - today
+  question: What is the total approved payment amount for FICC today?
+  expect:
+    answer_has_number: true
+- id: payments_rejected_week
+  mode: payments
+  retrieval: deterministic
+  tags:
+  - counts
+  - reject
+  question: How many payments were rejected this week?
+  expect:
+    answer_has_number: true
+- id: payments_who_approved
+  mode: payments
+  retrieval: deterministic
+  tags:
+  - who
+  - approve
+  question: Who approved payment {approved_payment_id}?
+  expect:
+    requires_context:
+    - approved_payment_id
+    min_answer_length: 10
+    answer_contains_any:
+    - approv
+    - pay-
+    - laurent
+    - user
+- id: payments_approved_by_pay201_week
+  mode: payments
+  retrieval: graph
+  tags:
+  - who
+  question: Show payments approved by Sophie Laurent (pay-201) this week with amounts.
+  expect:
+    answer_contains_any:
+    - pay-201
+    - laurent
+    - payment
+    - amount
+    - 'no'
+    - '0'
+    - approv
+- id: payments_creator_and_approver
+  mode: payments
+  retrieval: deterministic
+  tags:
+  - who
+  question: Who created payment {approved_payment_id} and who approved it?
+  expect:
+    requires_context:
+    - approved_payment_id
+    min_answer_length: 15
+    answer_contains_any:
+    - creat
+    - approv
+- id: payments_for_instruction
+  mode: payments
+  retrieval: deterministic
+  tags:
+  - instruction
+  question: List all APPROVED payments for instruction {approved_payment_instruction_id}.
+  expect:
+    requires_context:
+    - approved_payment_instruction_id
+    answer_contains_any:
+    - payment
+    - approv
+    - instruction
+    - 'no'
+    - '0'
+- id: payments_over_10m_week
+  mode: payments
+  retrieval: graph
+  tags:
+  - amounts
+  question: Show payments over $10M approved this week.
+  expect:
+    answer_contains_any:
+    - payment
+    - '10'
+    - million
+    - approv
+    - 'no'
+    - '0'
+    - amount
+- id: payments_over_100m
+  mode: payments
+  retrieval: graph
+  tags:
+  - amounts
+  question: List payments exceeding $100M.
+  expect:
+    answer_contains_any:
+    - payment
+    - '100'
+    - million
+    - 'no'
+    - '0'
+    - amount
+- id: payments_largest_week_by_lob
+  mode: payments
+  retrieval: graph
+  tags:
+  - amounts
+  - ranking
+  question: What are the largest approved payments this week by LOB?
+  expect:
+    answer_contains_any:
+    - payment
+    - largest
+    - lob
+    - amount
+    - 'no'
+    - '0'
+- id: payments_draft_fx
+  mode: payments
+  retrieval: graph
+  tags:
+  - status
+  - fx
+  question: List all DRAFT payments for LOB FX.
+  expect:
+    answer_contains_any:
+    - draft
+    - fx
+    - payment
+    - 'no'
+    - '0'
+- id: payments_submitted_waiting
+  mode: payments
+  retrieval: graph
+  tags:
+  - status
+  - submitted
+  question: Which payments are still SUBMITTED and waiting for approval?
+  expect:
+    answer_contains_any:
+    - submitted
+    - payment
+    - approv
+    - wait
+    - 'no'
+    - '0'
+- id: payments_self_approval
+  mode: payments
+  retrieval: graph
+  tags:
+  - compliance
+  - self-approval
+  question: Show payments where the creator also approved (self-approval).
+  expect:
+    answer_contains_any:
+    - self
+    - creator
+    - approv
+    - same
+    - 'no'
+    - '0'
+    - none
+- id: payments_subordinate_approver
+  mode: payments
+  retrieval: graph
+  tags:
+  - compliance
+  - hierarchy
+  question: List payments where the approver directly reports to the creator.
+  expect:
+    answer_contains_any:
+    - report
+    - creator
+    - approv
+    - subordinate
+    - 'no'
+    - '0'
+    - none
+- id: payments_lob_coverage_mismatch
+  mode: payments
+  retrieval: graph
+  tags:
+  - compliance
+  - lob
+  question: Show APPROVED payments where approver covers FX but payment LOB is FICC.
+  expect:
+    answer_contains_any:
+    - ficc
+    - fx
+    - lob
+    - cover
+    - approv
+    - 'no'
+    - '0'
+    - none
+- id: payments_desk_rates
+  mode: payments
+  retrieval: graph
+  tags:
+  - lob
+  - desk
+  question: List all payments for desk LOB DESK_RATES.
+  expect:
+    answer_contains_any:
+    - desk
+    - rates
+    - payment
+    - 'no'
+    - '0'
+- id: payments_fo_ficc101
+  mode: payments
+  retrieval: graph
+  tags:
+  - who
+  - front-office
+  question: Show payments submitted by front-office user fo-ficc-101.
+  expect:
+    answer_contains_any:
+    - fo-ficc-101
+    - submit
+    - payment
+    - 'no'
+    - '0'
+    - morrison
+- id: payments_mo_ficc_week
+  mode: payments
+  retrieval: deterministic
+  tags:
+  - who
+  - ficc
+  question: How many payments were created by middle office for FICC this week?
+  expect:
+    answer_has_number: true

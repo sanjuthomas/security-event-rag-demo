@@ -1,0 +1,51 @@
+entity: payment_security_event
+wired: true
+description: >
+  Payment security events (payment-security-events Kafka topic).
+
+context_root: event
+payload_source: payment_security_event
+
+includes:
+  - path: message
+  - path: timestamp
+  - path: severity
+  - path: event.action
+  - path: event.outcome
+  - path: event.reason
+  - profile: authorization_merged
+  - path: actor.user_id
+  - path: actor.given_name
+  - path: actor.family_name
+  - path: actor.title
+  - path: actor.roles
+    transform: join_list
+  - path: actor.groups
+    transform: join_list
+  - path: actor.covering_lobs
+    transform: join_list
+  - path: actor.lob
+  - path: resource.id
+  - path: resource.instruction_id
+  - path: resource.owning_lob
+  - path: resource.currency
+  - path: resource.amount
+    transform: str_value
+  - path: payment_snapshot.value_date
+  - path: payment_snapshot.instruction_type
+  - path: payment_snapshot.created_by.user_id
+  - path: payment_snapshot.created_by
+    transform: display_name
+  - path: payment_snapshot.approved_by.user_id
+  - path: payment_snapshot.approved_by
+    transform: display_name
+  - literal: payment
+
+excludes:
+  - event_id
+  - payment_snapshot full JSON
+  - authorization raw details block
+
+join:
+  separator: " "
+  omit_empty: true

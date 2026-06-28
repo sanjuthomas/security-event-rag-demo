@@ -37,6 +37,7 @@ from etl.payment_consumer import (
 )
 from etl.payment_pipeline import PaymentFactPipeline, PaymentSecurityEventPipeline
 from etl.qdrant_store import QdrantHybridStore
+from etl.search_text.builder import list_profile_fields, list_search_profiles
 
 __version__ = "0.2.0"
 
@@ -144,6 +145,22 @@ async def health() -> dict:
     return {"status": overall, "components": components}
 
 
+@api_router.get("/search-profiles")
+async def search_profiles() -> dict:
+    """YAML search_text field lists — what feeds dense + BM25 indexing per entity."""
+    profiles = await asyncio.to_thread(list_search_profiles)
+    return {"count": len(profiles), "profiles": profiles}
+
+
+@api_router.get("/search-profiles/{entity}")
+async def search_profile_detail(entity: str) -> dict:
+    try:
+        profile = await asyncio.to_thread(list_profile_fields, entity)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return profile
+
+
 @api_router.get("/vector/chunk-stats")
 async def vector_chunk_stats(
     limit: int = Query(default=10, ge=1, le=50),
@@ -172,6 +189,7 @@ async def vector_chunk_stats(
         },
     }
     stats_payload["embedding_context_tokens"] = 32_768
+    stats_payload["search_profiles"] = await asyncio.to_thread(list_search_profiles)
     return stats_payload
 
 

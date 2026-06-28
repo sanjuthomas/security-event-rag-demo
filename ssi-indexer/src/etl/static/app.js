@@ -321,9 +321,11 @@ function startComponentsPolling() {
   }
   void refreshComponents();
   void refreshChunkStats();
+  void refreshSearchProfiles();
   componentsTimer = setInterval(() => {
     void refreshComponents();
     void refreshChunkStats();
+    void refreshSearchProfiles();
   }, 20000);
 }
 
@@ -433,6 +435,105 @@ async function refreshChunkStats() {
 if (chunkStatsRefreshBtn) {
   chunkStatsRefreshBtn.addEventListener("click", () => {
     void refreshChunkStats();
+  });
+}
+
+// ── Search text profiles ───────────────────────────────────────────────────
+
+const searchProfilesEmpty = document.getElementById("search-profiles-empty");
+const searchProfilesContent = document.getElementById("search-profiles-content");
+const searchProfilesList = document.getElementById("search-profiles-list");
+const searchProfilesRefreshBtn = document.getElementById("search-profiles-refresh-btn");
+
+function formatProfileField(item) {
+  if (item.literal != null) {
+    return `literal: "${item.literal}"`;
+  }
+  const path = item.path || "—";
+  return item.transform ? `${path} (${item.transform})` : path;
+}
+
+function renderSearchProfiles(data) {
+  searchProfilesList.innerHTML = "";
+  (data.profiles || []).forEach((profile, index) => {
+    const details = document.createElement("details");
+    details.className = "search-profile-card";
+    if (index === 0) {
+      details.open = true;
+    }
+
+    const included = (profile.includes || [])
+      .map((item) => `<li>${escapeHtml(formatProfileField(item))}</li>`)
+      .join("");
+    const excluded = (profile.excludes || [])
+      .map((item) => `<li>${escapeHtml(item)}</li>`)
+      .join("");
+
+    details.innerHTML = `
+      <summary>
+        <span class="search-profile-meta">
+          <span>${escapeHtml(profile.entity || "unknown")}</span>
+          <span class="chunk-source-pill">${escapeHtml(profile.payload_source || profile.entity || "—")}</span>
+          <span class="chunk-source-pill">${profile.wired ? "wired" : "documented"}</span>
+        </span>
+      </summary>
+      <div class="search-profile-body">
+        <p class="search-profile-desc">${escapeHtml(profile.description || "—")}</p>
+        <p class="search-profile-desc mono">context_root: ${escapeHtml(profile.context_root || "—")}</p>
+        <div class="search-profile-columns">
+          <div>
+            <h3>In search_text (${(profile.includes || []).length})</h3>
+            <ul class="search-profile-fields">${included || "<li>—</li>"}</ul>
+          </div>
+          <div>
+            <h3>Payload only (${(profile.excludes || []).length})</h3>
+            <ul class="search-profile-fields">${excluded || "<li>—</li>"}</ul>
+          </div>
+        </div>
+      </div>
+    `;
+    searchProfilesList.appendChild(details);
+  });
+
+  searchProfilesEmpty.classList.add("hidden");
+  searchProfilesContent.classList.remove("hidden");
+}
+
+async function refreshSearchProfiles() {
+  if (!searchProfilesList) {
+    return;
+  }
+  if (!AdminAuth.loadSession()) {
+    searchProfilesContent.classList.add("hidden");
+    searchProfilesEmpty.classList.remove("hidden");
+    searchProfilesEmpty.textContent = "Sign in to load search profile definitions.";
+    return;
+  }
+
+  if (searchProfilesRefreshBtn) {
+    searchProfilesRefreshBtn.disabled = true;
+  }
+  try {
+    const response = await apiFetch("/api/search-profiles");
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(typeof data.detail === "string" ? data.detail : `HTTP ${response.status}`);
+    }
+    renderSearchProfiles(data);
+  } catch (error) {
+    searchProfilesContent.classList.add("hidden");
+    searchProfilesEmpty.classList.remove("hidden");
+    searchProfilesEmpty.textContent = `Search profiles unavailable: ${error.message}`;
+  } finally {
+    if (searchProfilesRefreshBtn) {
+      searchProfilesRefreshBtn.disabled = false;
+    }
+  }
+}
+
+if (searchProfilesRefreshBtn) {
+  searchProfilesRefreshBtn.addEventListener("click", () => {
+    void refreshSearchProfiles();
   });
 }
 

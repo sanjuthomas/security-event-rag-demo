@@ -457,10 +457,17 @@ async def test_get_not_found(service: PaymentService, subject: Subject) -> None:
 async def test_publish_payment_fact_swallows_kafka_errors(
     service: PaymentService,
     payment: Payment,
+    subject: Subject,
 ) -> None:
+    from ps.models.enums import PaymentAction
+
     with patch(
         "ps.service.kafka_publisher.publish_payment",
         new_callable=AsyncMock,
         side_effect=RuntimeError("kafka down"),
     ):
-        await service._publish_payment_fact(payment)
+        await service._publish_payment_fact(
+            PaymentAction.CREATE_PAYMENT,
+            subject,
+            payment,
+        )

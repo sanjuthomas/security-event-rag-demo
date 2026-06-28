@@ -1,0 +1,54 @@
+entity: instruction_state
+wired: true
+description: >
+  Instruction facts (ssi-instructions Kafka topic) — one Qdrant point per instruction,
+  updated in place.
+
+context_root: fact
+payload_source: instruction_state
+
+includes:
+  - path: instruction_snapshot.instruction_id
+  - path: instruction_snapshot.status
+  - path: instruction_snapshot.instruction_type
+  - path: instruction_snapshot.owning_lob
+  - path: instruction_snapshot.wire_scope
+  - path: instruction_snapshot.currency
+  - path: instruction_snapshot.creditor.name
+  - path: instruction_snapshot.creditor_account.identification
+  - path: instruction_snapshot.creditor_account.identification_scheme
+  - path: instruction_snapshot.creditor_agent.financial_institution.identification
+  - path: instruction_snapshot.debtor.name
+  - path: instruction_snapshot.debtor_account.identification
+  - path: instruction_snapshot.effective_date
+  - path: instruction_snapshot.end_date
+  - path: instruction_snapshot.created_by.user_id
+  - path: instruction_snapshot.created_by.given_name
+  - path: instruction_snapshot.created_by.family_name
+  - path: instruction_snapshot.created_by.lob
+  - path: instruction_snapshot.approved_by.user_id
+  - path: instruction_snapshot.approved_by.given_name
+  - path: instruction_snapshot.approved_by.family_name
+  - path: instruction_snapshot.approved_by.lob
+  - path: instruction_snapshot.rejected_by.user_id
+  - path: instruction_snapshot.rejected_by.given_name
+  - path: instruction_snapshot.rejected_by.family_name
+  - path: instruction_snapshot.approved_at
+  - path: actor_user_id
+  - path: actor_given_name
+  - path: actor_family_name
+  - path: actor_lob
+  - path: action
+  - profile: authorization_fact
+
+excludes:
+  - version_number
+  - timestamp
+  - instruction_snapshot.rejected_by.lob
+  - instruction_snapshot.created_by.title
+  - actor title / roles
+  - full instruction_snapshot JSON beyond listed paths
+
+join:
+  separator: " "
+  omit_empty: true

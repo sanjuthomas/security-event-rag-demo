@@ -1,0 +1,16 @@
+# Reusable authorization block for merged security-event context.
+# Used by instruction_security_event (wired) and payment_security_event (documented).
+
+fields:
+  - path: timestamp
+  - path: authorization_summary
+  - path: authorization_decision
+  - path: event_reason
+  - path: authorization_basis
+    transform: join_list
+  - path: authorization_violations
+    transform: join_list
+  - path: actor_groups
+    transform: join_list
+  - path: actor_covering_lobs
+    transform: join_list

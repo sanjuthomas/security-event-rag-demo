@@ -37,6 +37,7 @@ class PaymentKafkaPublisher:
             self._producer = None
 
     async def publish_payment(self, fact: dict[str, Any]) -> None:
+        """Publish full cumulative payment state to ssi-payments."""
         if self._producer is None:
             return
         payment_id = fact.get("payment_id", "")

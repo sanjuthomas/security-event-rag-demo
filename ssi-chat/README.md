@@ -80,7 +80,7 @@ Requires **compliance sign-in** at http://localhost:8092 (`comp-001` / `comp-002
 
 ## Example questions
 
-See **`regression/questions.yaml`** for the full regression bank (~60 cases) and **`regression/README.md`** for how to run it.
+See **`regression/questions.yaml`** for the full regression bank (59 cases, each tagged with `retrieval: deterministic | graph | vector | eligibility`) and **`regression/README.md`** for how to run it.
 
 **Security Events mode:**
 - How many ALERT events happened today?
@@ -150,4 +150,4 @@ pip install -e ".[regression]"
 PYTHONPATH=. python -m regression.runner --seed --report regression-report.json
 ```
 
-See `regression/README.md` for filters (`--mode`, `--tags`, `--ids`) and CI usage via `RUN_CHAT_REGRESSION=1 pytest`.
+See `regression/README.md` for filters (`--mode`, `--tags`, `--retrieval`, `--ids`) and CI usage via `RUN_CHAT_REGRESSION=1 pytest`.

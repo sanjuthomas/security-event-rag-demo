@@ -13,6 +13,7 @@ dependencies = [
     "qdrant-client>=1.15.2",
     "httpx>=0.28.0",
     "PyJWT[crypto]>=2.10.0",
+    "PyYAML>=6.0.2",
     "ssi-telemetry",
 ]
 

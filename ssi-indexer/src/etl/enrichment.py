@@ -4,10 +4,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from etl.authorization_context import (
-    authorization_merged_fields,
-    authorization_search_parts,
-)
+from etl.authorization_context import authorization_merged_fields
+from etl.search_text.builder import build_search_text_from_profile
 
 
 def _display_name(user: dict[str, Any]) -> str:
@@ -124,49 +122,7 @@ def build_search_text(
     merged: dict[str, Any] | None = None,
 ) -> str:
     ctx = merged or build_merged_context(security_event, instruction)
-    parts = [
-        ctx.get("message", ""),
-        ctx.get("severity", ""),
-        ctx.get("action", ""),
-        ctx.get("outcome", ""),
-        ctx.get("reason") or "",
-        *authorization_search_parts(ctx),
-        ctx.get("actor_user_id", ""),
-        ctx.get("actor_given_name") or "",
-        ctx.get("actor_family_name") or "",
-        ctx.get("actor_title", ""),
-        " ".join(ctx.get("actor_roles") or []),
-        ctx.get("actor_lob") or "",
-        ctx.get("actor_supervisor_id") or "",
-        ctx.get("owning_lob", ""),
-        ctx.get("status", ""),
-        ctx.get("instruction_type") or "",
-        ctx.get("wire_scope", ""),
-        ctx.get("currency", ""),
-        ctx.get("creditor_name") or "",
-        ctx.get("creditor_account_id") or "",
-        ctx.get("debtor_name") or "",
-        ctx.get("debtor_account_id") or "",
-        ctx.get("creditor_agent_bic") or "",
-        ctx.get("creator_user_id", ""),
-        ctx.get("creator_given_name") or "",
-        ctx.get("creator_family_name") or "",
-        ctx.get("creator_title", ""),
-        ctx.get("creator_lob") or "",
-        ctx.get("approver_user_id", ""),
-        ctx.get("approver_given_name") or "",
-        ctx.get("approver_family_name") or "",
-        ctx.get("approver_title", ""),
-        ctx.get("approver_lob") or "",
-        ctx.get("rejector_user_id", ""),
-        ctx.get("rejector_given_name") or "",
-        ctx.get("rejector_family_name") or "",
-        ctx.get("rejector_title", ""),
-        ctx.get("rejector_lob") or "",
-        ctx.get("effective_date", ""),
-        ctx.get("end_date", ""),
-    ]
-    return " ".join(str(part) for part in parts if part).strip()
+    return build_search_text_from_profile("instruction_security_event", ctx)
 
 
 def enrich_document(

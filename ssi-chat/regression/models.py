@@ -7,6 +7,9 @@ from pydantic import BaseModel, Field
 
 SearchMode = Literal["events", "instructions", "payments", "all"]
 
+# Primary retrieval path the answer is expected to use (vector still runs in parallel except eligibility).
+RetrievalStrategy = Literal["deterministic", "graph", "vector", "eligibility"]
+
 
 class SeedStep(BaseModel):
     action: str
@@ -41,6 +44,13 @@ class ExpectConfig(BaseModel):
 class RegressionCase(BaseModel):
     id: str
     mode: SearchMode
+    retrieval: RetrievalStrategy = Field(
+        description=(
+            "Primary engine for the answer: deterministic (Neo4j formatter, no LLM synthesis), "
+            "graph (Neo4j planned/LLM Cypher authoritative), vector (Qdrant dense/BM25 primary), "
+            "eligibility (live OPA via authorization-service, no Qdrant)."
+        ),
+    )
     question: str
     tags: list[str] = Field(default_factory=list)
     expect: ExpectConfig = Field(default_factory=ExpectConfig)
@@ -65,6 +75,7 @@ class CaseResult(BaseModel):
     retrieval_ms: float | None = None
     generation_ms: float | None = None
     tags: list[str] = Field(default_factory=list)
+    retrieval: RetrievalStrategy | None = None
 
 
 class SuiteResult(BaseModel):

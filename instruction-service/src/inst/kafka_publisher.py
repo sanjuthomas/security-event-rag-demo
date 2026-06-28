@@ -54,6 +54,7 @@ class SecurityEventKafkaPublisher:
             logger.exception("failed to publish security event %s to Kafka", event_id)
 
     async def publish_instruction_fact(self, fact: dict[str, Any]) -> None:
+        """Publish full cumulative instruction state to ssi-instructions."""
         if self._producer is None:
             return
 

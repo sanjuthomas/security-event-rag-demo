@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from etl.instruction_pipeline import _build_instruction_search_text, _display_name
+from etl.instruction_pipeline import build_instruction_state_search_text, _display_name
 from etl.payment_pipeline import (
-    _build_payment_event_search_text,
-    _build_payment_fact_search_text,
+    build_payment_event_search_text,
+    build_payment_fact_search_text,
     _display,
     _roles_json,
 )
@@ -44,7 +44,7 @@ def test_instruction_build_search_text():
             "allow_basis": ["rule"],
         },
     }
-    text = _build_instruction_search_text(fact)
+    text = build_instruction_state_search_text(fact)
     assert "i-1" in text
     assert "WIRE" in text
     assert "Cred" in text
@@ -99,7 +99,7 @@ def test_payment_event_search_text():
             }
         },
     }
-    text = _build_payment_event_search_text(event)
+    text = build_payment_event_search_text(event)
     assert "payment blocked" in text
     assert "pay-1" in text
     assert "over limit" in text
@@ -120,7 +120,7 @@ def test_payment_fact_search_text():
         "approved_by": {"user_id": "a1", "given_name": "A", "family_name": "Ap"},
         "rejected_by": {"user_id": "r1", "given_name": "R", "family_name": "Re"},
     }
-    text = _build_payment_fact_search_text(fact)
+    text = build_payment_fact_search_text(fact)
     assert "pay-99" in text
     assert "EUR" in text
     assert "500" in text
