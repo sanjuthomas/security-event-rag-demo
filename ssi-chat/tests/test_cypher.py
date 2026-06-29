@@ -229,6 +229,19 @@ class TestPlanGraphQueries:
         query = planned[0][1]
         assert "p.status = 'APPROVED'" in query
         assert "p.owning_lob = 'FICC'" in query
+        assert "date(datetime(p.updated_at)) = date()" in query
+        assert "value_date" not in query.split("WHERE", 1)[1].split("RETURN", 1)[0]
+
+    def test_payment_count_todays_value_date(self) -> None:
+        planned = plan_graph_queries(
+            "How many payments do we have in the system with today's value date?",
+            mode="payments",
+        )
+        assert planned is not None
+        assert planned[0][0] == "payment_count"
+        query = planned[0][1]
+        assert "value_date STARTS WITH toString(date())" in query
+        assert "updated_at" not in query
         assert "count(p) AS total" in query
 
     def test_instruction_count_in_store(self) -> None:

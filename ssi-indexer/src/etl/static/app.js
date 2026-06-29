@@ -625,7 +625,7 @@ cypherForm.addEventListener("submit", async (event) => {
       cypherErrorMsg.classList.remove("hidden");
     }
 
-    cypherGenerateStatus.textContent = `Generated via ${data.model || "llama3:8b"}`;
+    cypherGenerateStatus.textContent = `Generated via ${data.model || "hmahmood/neo4j-gemma-3-27b-inst-q8"}`;
   } catch (error) {
     cypherGenerateStatus.textContent = `Error: ${error.message}`;
   } finally {

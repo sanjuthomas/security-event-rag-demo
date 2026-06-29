@@ -49,6 +49,8 @@ _COUNT_QUESTION = re.compile(
     re.IGNORECASE,
 )
 
+_PAYMENT_VALUE_DATE_QUESTION = re.compile(r"value\s*date", re.IGNORECASE)
+
 _PAYMENT_TOTAL_AMOUNT = re.compile(
     r"\b(total|sum)\b.*\b(amount|value)\b|\b(amount|value)\b.*\b(total|sum)\b",
     re.IGNORECASE,
@@ -169,6 +171,10 @@ def normalize_read_only_cypher(cypher: str) -> str:
 
 def is_count_question(question: str) -> bool:
     return bool(_COUNT_QUESTION.search(question))
+
+
+def is_payment_value_date_question(question: str) -> bool:
+    return bool(_PAYMENT_VALUE_DATE_QUESTION.search(question))
 
 
 def is_payment_total_amount_question(question: str) -> bool:
@@ -305,7 +311,18 @@ def _time_filter_cypher(flags: dict[str, bool]) -> str:
     return ""
 
 
-def _payment_time_filter_cypher(flags: dict[str, bool]) -> str:
+def _payment_value_date_filter_cypher(flags: dict[str, bool]) -> str:
+    """value_date is an ISO date string on Payment — compare via toString(date())."""
+    if flags["today"]:
+        return "AND p.value_date STARTS WITH toString(date())"
+    if flags["week"]:
+        return "AND p.value_date >= toString(date() - duration('P7D'))"
+    return ""
+
+
+def _payment_time_filter_cypher(flags: dict[str, bool], *, use_value_date: bool = False) -> str:
+    if use_value_date:
+        return _payment_value_date_filter_cypher(flags)
     if flags["today"]:
         return "AND date(datetime(p.updated_at)) = date()"
     if flags["week"]:
@@ -336,7 +353,10 @@ def _payment_aggregate_queries(
     lob = lob_filter_from_question(question)
     lob_filter = f"AND p.owning_lob = '{lob}'" if lob else ""
     status_filter = _payment_status_filter_cypher(question)
-    time_filter = _payment_time_filter_cypher(flags)
+    time_filter = _payment_time_filter_cypher(
+        flags,
+        use_value_date=is_payment_value_date_question(question),
+    )
 
     if sum_amount:
         return [

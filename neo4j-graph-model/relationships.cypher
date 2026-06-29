@@ -169,7 +169,7 @@
 //   status              PENDING | APPROVED | REJECTED
 //   amount              numeric payment amount
 //   currency            ISO 4217 currency code (from instruction)
-//   value_date          intended settlement date
+//   value_date          intended settlement date (ISO string YYYY-MM-DD)
 //   owning_lob          LOB from the backing instruction
 //   instruction_type    STANDING | SINGLE_USE
 //   creator_user_id

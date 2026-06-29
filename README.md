@@ -85,7 +85,7 @@ flowchart TB
     end
 
     subgraph ml [Host ML]
-        OLLAMA[Ollama — qwen3-embed + llama3]
+        OLLAMA[Ollama — qwen3-embed + neo4j-gemma-3-27b]
     end
 
     ZITADEL --> ILM
@@ -321,15 +321,16 @@ The graph also serves as a **cross-validation layer**: if a UUID is present in t
 
 | Model | Params | Context | Cypher quality | Notes |
 |---|---|---|---|---|
-| `llama3:8b` ✓ | 8B | 8 192 | Good | Default chat/Cypher model (quantised via Ollama) |
+| `hmahmood/neo4j-gemma-3-27b-inst-q8` ✓ | 27B | 128 000 | Very good | Default — Neo4j fine-tuned Gemma 3 for Cypher |
+| `gemma3:27b` | 27B | 128 000 | Very good | Base model alternative |
+| `qwen3:30b` | 30B | 32 768 | Excellent | Strong alternative |
+| `llama3:8b` | 8B | 8 192 | Good | Lighter alternative; faster on smaller GPUs |
 | `llama3:70b` | 70B | 8 192 | Excellent | Higher quality; needs more RAM/GPU |
-| `qwen3:30b` | 30B | 32 768 | Excellent | Prior default; smaller footprint |
 | `llama3.1:8b` | 8B | 128 000 | Good | Fast, lower quality Cypher for multi-hop queries |
 | `mistral:7b` | 7B | 32 768 | Fair | Tends to hallucinate relationship directions |
 | `codellama:13b` | 13B | 16 384 | Good | Strong on code but weaker on natural-language synthesis |
-| `gemma3:27b` | 27B | 128 000 | Very good | Competitive mid-size alternative |
 
-`llama3:8b` is the default for PolicyPilot answer synthesis and Cypher generation. Ensure the model is pulled locally before starting the stack (`ollama pull llama3:8b`).
+`hmahmood/neo4j-gemma-3-27b-inst-q8` is the default for PolicyPilot answer synthesis and Cypher generation. Ensure the model is pulled locally before starting the stack (`ollama pull hmahmood/neo4j-gemma-3-27b-inst-q8`).
 
 > To swap models: copy `.env.example` to `.env` and set `OLLAMA_CHAT_MODEL` / `OLLAMA_EMBEDDING_MODEL`, then re-pull via `ollama pull`.
 
@@ -348,7 +349,7 @@ All models and benchmarks in this demo were run on the following hardware:
 | GPU bus | Built-in (unified memory — no PCIe transfer overhead) |
 | Metal support | Metal 3 |
 
-The unified memory architecture means the CPU, GPU, and Neural Engine share the same 64 GB pool with no PCIe copy overhead between host and device memory. The default `llama3:8b` chat model runs comfortably on this hardware; use `llama3:70b` only if you have enough RAM/GPU headroom.
+The unified memory architecture means the CPU, GPU, and Neural Engine share the same 64 GB pool with no PCIe copy overhead between host and device memory. The default `hmahmood/neo4j-gemma-3-27b-inst-q8` chat model runs comfortably on this hardware; use `llama3:70b` only if you have enough RAM/GPU headroom.
 
 Embedding throughput with `qwen3-embedding:0.6b` is sufficient for real-time ETL indexing at demo event rates, with a 32K-token context window that avoids clipping typical security-event `search_text`.
 
@@ -412,16 +413,16 @@ Embeddings are queried through `POST /api/embed` on the local Ollama instance. E
 
 Alongside dense vectors, both the ETL indexer and Chat retriever use Qdrant's built-in **BM25** sparse encoder (`qdrant/bm25`). BM25 is a classical term-frequency retrieval model — it complements dense semantic search by excelling at exact-match terms like UUIDs, user IDs (`mo-100`, `ficc-300`), and action names (`APPROVE`, `REJECT`).
 
-### Chat / answer model — `llama3:8b`
+### Chat / answer model — `hmahmood/neo4j-gemma-3-27b-inst-q8`
 
-The LLM used for Cypher generation and answer synthesis is **Llama 3 8B** served via Ollama.
+The LLM used for Cypher generation and answer synthesis is a **Neo4j fine-tuned Gemma 3 27B** (Q8) served via Ollama.
 
 | Property | Value |
 |----------|-------|
-| Model | `llama3:8b` (default, configurable via `OLLAMA_CHAT_MODEL` in `.env`) |
-| Provider | Meta |
-| Parameters | 8B |
-| Strengths | Fast inference, structured output (Cypher), natural-language synthesis |
+| Model | `hmahmood/neo4j-gemma-3-27b-inst-q8` (default, configurable via `OLLAMA_CHAT_MODEL` in `.env`) |
+| Base | Gemma 3 27B instruction-tuned for Neo4j Cypher |
+| Parameters | 27B (Q8 quantisation) |
+| Strengths | Long context, graph-aware Cypher generation, natural-language synthesis |
 
 The model is called twice per user question (or three times for instruction approval audit questions — see below):
 1. **Cypher generation** — mode-specific system prompt + schema + question → a read-only Neo4j Cypher query
@@ -430,7 +431,7 @@ The model is called twice per user question (or three times for instruction appr
 
 Both calls are made via `POST /api/chat` on the local Ollama instance with `stream: false`.
 
-> To use a different chat model: set `OLLAMA_CHAT_MODEL=qwen3:30b` in `.env` (or export it) and re-pull via `ollama pull`.
+> To use a different chat model: set `OLLAMA_CHAT_MODEL=gemma3:27b` in `.env` (or export it) and re-pull via `ollama pull`.
 
 ---
 
@@ -441,7 +442,7 @@ Both calls are made via `POST /api/chat` on the local Ollama instance with `stre
 | Docker + Docker Compose | All containers are defined in `docker-compose.yml` |
 | [Ollama](https://ollama.com) running on the host | Needed by ETL and Chat; containers reach it via `host.docker.internal:11434` |
 | `qwen3-embedding:0.6b` model pulled | `ollama pull qwen3-embedding:0.6b` |
-| Chat model pulled | Default: `llama3:8b` — `ollama pull llama3:8b` |
+| Chat model pulled | Default: `hmahmood/neo4j-gemma-3-27b-inst-q8` — `ollama pull hmahmood/neo4j-gemma-3-27b-inst-q8` |
 
 ---
 
@@ -453,7 +454,7 @@ cp .env.example .env
 
 # 1. Pull Ollama models on the host
 ollama pull qwen3-embedding:0.6b
-ollama pull llama3:8b
+ollama pull hmahmood/neo4j-gemma-3-27b-inst-q8
 
 # 2. Start the full stack
 docker compose up -d

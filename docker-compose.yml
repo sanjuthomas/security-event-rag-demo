@@ -9,14 +9,14 @@ x-otel-environment: &otel-environment
 x-ollama-environment: &ollama-environment
   OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
   OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:-qwen3-embedding:0.6b}
-  OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-llama3:8b}
+  OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-hmahmood/neo4j-gemma-3-27b-inst-q8}
 
 # Single merge anchor for services that need OTel + Ollama (YAML allows only one `<<` per block)
 x-otel-ollama-environment: &otel-ollama-environment
   <<: *otel-environment
   OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
   OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:-qwen3-embedding:0.6b}
-  OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-llama3:8b}
+  OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-hmahmood/neo4j-gemma-3-27b-inst-q8}
 
 services:
   otel-collector:

@@ -87,7 +87,7 @@ Copy `.env.example` to `.env` at the repo root to override defaults. Docker Comp
 | `KAFKA_PAYMENT_SECURITY_EVENTS_TOPIC` | `payment-security-events` |
 | `KAFKA_PAYMENTS_TOPIC` | `ssi-payments` |
 | `OLLAMA_EMBEDDING_MODEL` | `qwen3-embedding:0.6b` |
-| `OLLAMA_CHAT_MODEL` | `llama3:8b` |
+| `OLLAMA_CHAT_MODEL` | `hmahmood/neo4j-gemma-3-27b-inst-q8` |
 | `QDRANT_COLLECTION` | `ssi_search_index` |
 | `NEO4J_URI` | `bolt://neo4j:7687` |
 

@@ -18,7 +18,7 @@ PolicyPilot still runs dense vector search **in parallel** for every case except
 ## Prerequisites
 
 - Full stack running (`docker compose up -d`)
-- Host **Ollama** with `qwen3-embedding:0.6b` and `llama3:8b` (or models configured in `.env`)
+- Host **Ollama** with `qwen3-embedding:0.6b` and `hmahmood/neo4j-gemma-3-27b-inst-q8` (or models configured in `.env`)
 - Harness reachable at http://localhost:8091 (for `--seed`)
 
 ## Quick run

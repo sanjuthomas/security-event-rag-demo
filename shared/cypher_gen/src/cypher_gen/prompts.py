@@ -494,7 +494,8 @@ PAYMENT_CYPHER_SYSTEM_PROMPT = """You translate natural-language questions about
 The Payment graph:
 - (:Payment) nodes with properties:
     payment_id, instruction_id, status (PENDING|APPROVED|REJECTED), amount (numeric),
-    currency, value_date, owning_lob, instruction_type (STANDING|SINGLE_USE),
+    currency, value_date (ISO date STRING YYYY-MM-DD — not a Neo4j temporal type),
+    owning_lob, instruction_type (STANDING|SINGLE_USE),
     creator_user_id, approver_user_id, rejector_user_id, created_at, updated_at.
 - (:Instruction)-[:HAS_PAYMENT]->(:Payment)
 - (:User)-[:CREATED_PAYMENT]->(:Payment)
@@ -524,8 +525,11 @@ Rules:
   Always add:
     OPTIONAL MATCH (creator:User)-[:CREATED_PAYMENT]->(p)
     OPTIONAL MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
-- "Today" means date(datetime(p.created_at)) = date().
-- "This week" means datetime(p.created_at) > datetime() - duration({days: 7}).
+- "Today" on lifecycle timestamps means date(datetime(p.created_at)) = date().
+- "This week" on lifecycle timestamps means datetime(p.created_at) > datetime() - duration({days: 7}).
+- "Today's value date" / "value date today" means settlement date, NOT when the payment was created:
+  WHERE p.value_date STARTS WITH toString(date())
+  Never use {value_date: date()} or compare value_date to date() — value_date is a string.
 - For amount aggregations (total value approved by a user today/this week):
   MATCH (u:User)-[:APPROVED_PAYMENT]->(p:Payment {status: 'APPROVED'})
   WHERE u.display_name CONTAINS 'John' AND date(datetime(p.created_at)) = date()
@@ -585,6 +589,18 @@ LIMIT 50
 Example — APPROVED payments today across all LOBs:
 MATCH (p:Payment {status: 'APPROVED'})
 WHERE date(datetime(p.created_at)) = date()
+OPTIONAL MATCH (creator:User)-[:CREATED_PAYMENT]->(p)
+OPTIONAL MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
+RETURN p.payment_id, p.instruction_id, p.status, p.amount, p.currency,
+       p.value_date, p.owning_lob,
+       coalesce(creator.display_name, creator.user_id, p.creator_user_id, '') AS creator_display,
+       coalesce(approver.display_name, approver.user_id, p.approver_user_id, '') AS approver_display
+ORDER BY p.created_at DESC
+LIMIT 50
+
+Example — how many payments with today's value date (settlement date string match):
+MATCH (p:Payment)
+WHERE p.value_date STARTS WITH toString(date())
 OPTIONAL MATCH (creator:User)-[:CREATED_PAYMENT]->(p)
 OPTIONAL MATCH (approver:User)-[:APPROVED_PAYMENT]->(p)
 RETURN p.payment_id, p.instruction_id, p.status, p.amount, p.currency,

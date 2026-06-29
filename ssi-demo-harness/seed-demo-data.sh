@@ -3,7 +3,7 @@
 #
 # Prerequisites on the host (before reset):
 #   ollama pull qwen3-embedding:0.6b
-#   ollama pull llama3:8b
+#   ollama pull hmahmood/neo4j-gemma-3-27b-inst-q8
 #
 # By default performs a full reset (docker compose down -v, up, Zitadel users) then seeds
 # via the harness HTTP API plus extra policy-denial calls inside the harness container.
