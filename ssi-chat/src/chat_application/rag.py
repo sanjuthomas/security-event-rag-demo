@@ -15,10 +15,12 @@ from chat_application.authorization_client import (
 from chat_application.config import settings
 from chat_application.cypher import (
     extract_entity_ids,
+    extract_payment_ids,
     extract_uuids,
     instruction_id_from_list_payments_question,
     instruction_status_filter_from_question,
     is_alert_ranking_question,
+    is_instruction_approver_via_payment_question,
     is_instruction_count_aggregate_question,
     is_max_payments_per_instruction_question,
     is_payment_count_aggregate_question,
@@ -81,6 +83,8 @@ def _is_instruction_approval_question(message: str, mode: SearchMode) -> bool:
     q = message.lower()
     if "approv" not in q:
         return False
+    if is_instruction_approver_via_payment_question(message):
+        return True
     if "payment" in q and "instruction" not in q:
         return False
     return mode == "instructions" or "instruction" in q
@@ -89,6 +93,8 @@ def _is_instruction_approval_question(message: str, mode: SearchMode) -> bool:
 def _is_payment_approval_question(message: str, mode: SearchMode) -> bool:
     q = message.lower()
     if "approv" not in q:
+        return False
+    if is_instruction_approver_via_payment_question(message):
         return False
     if "instruction" in q and "payment" not in q:
         return False
@@ -317,6 +323,8 @@ def _should_lookup_payment_ids(message: str, uuids: list[str], mode: SearchMode)
         return False
     if is_payments_for_instruction_question(message):
         return False
+    if is_instruction_approver_via_payment_question(message):
+        return True
     if mode == "payments":
         return True
     return "payment" in message.lower()
@@ -610,6 +618,7 @@ class RagService:
     ) -> list[dict[str, Any]]:
         hits: list[dict[str, Any]] = []
         approval_question = "approv" in message.lower()
+        via_instruction = is_instruction_approver_via_payment_question(message)
 
         for payment_id in payment_ids:
             fact_hit = await asyncio.to_thread(
@@ -618,7 +627,14 @@ class RagService:
             if fact_hit is not None:
                 hits.append(fact_hit)
 
-            if approval_question:
+            if approval_question and via_instruction:
+                instruction_id = (fact_hit or {}).get("instruction_id")
+                if instruction_id:
+                    approve_hits = await asyncio.to_thread(
+                        self.qdrant.fetch_instruction_approve_events, instruction_id
+                    )
+                    hits.extend(approve_hits)
+            elif approval_question:
                 approve_hits = await asyncio.to_thread(
                     self.qdrant.fetch_payment_approve_events, payment_id
                 )
@@ -759,19 +775,38 @@ class RagService:
         graph_rows: list[dict[str, Any]],
     ) -> str | None:
         """Return Who/When/Why when OPA authorization is in context; LLM rewrites WHY for readability."""
-        if "approv" not in message.lower() or not instruction_ids:
+        if "approv" not in message.lower():
             return None
 
-        target_id = instruction_ids[0]
+        via_payment = is_instruction_approver_via_payment_question(message)
+        payment_ids = extract_payment_ids(message)
+        if via_payment:
+            if not payment_ids:
+                return None
+            target_payment_id = payment_ids[0]
+            target_instruction_id: str | None = None
+        else:
+            if not instruction_ids:
+                return None
+            target_payment_id = None
+            target_instruction_id = instruction_ids[0]
+
         approver: str | None = None
         when: str | None = None
         summary: str | None = None
         basis: list[str] = []
+        resolved_instruction_id: str | None = None
 
         for row in graph_rows:
-            row_id = row.get("v.instruction_id") or row.get("instruction_id")
-            if str(row_id) != target_id:
-                continue
+            if via_payment:
+                if str(row.get("payment_id")) != target_payment_id:
+                    continue
+                resolved_instruction_id = str(row.get("instruction_id") or "")
+            else:
+                row_id = row.get("v.instruction_id") or row.get("instruction_id")
+                if str(row_id) != target_instruction_id:
+                    continue
+                resolved_instruction_id = str(row_id)
             summary = row.get("v.authorization_summary") or row.get("authorization_summary")
             approver = row.get("approver_display")
             when = row.get("v.approved_at") or row.get("approved_at")
@@ -780,10 +815,13 @@ class RagService:
             )
             break
 
+        lookup_id = resolved_instruction_id or target_instruction_id
         for hit in hits:
             payload = hit.merged or {}
             payload_id = hit.instruction_id or payload.get("instruction_id")
-            if str(payload_id) != target_id:
+            if lookup_id and str(payload_id) != lookup_id:
+                continue
+            if via_payment and lookup_id is None:
                 continue
             summary = summary or payload.get("authorization_summary")
             approver = approver or payload.get("approver_display") or payload.get("actor_display")
@@ -804,9 +842,15 @@ class RagService:
         why = _append_policy_basis(why, basis)
 
         when_line = f"WHEN: {when}" if when else None
+        header = (
+            f"Instruction: {resolved_instruction_id} (via payment {target_payment_id})"
+            if via_payment and resolved_instruction_id
+            else None
+        )
         return "\n".join(
             line
             for line in (
+                header,
                 f"WHO: {approver}",
                 when_line,
                 f"WHY: {why}",

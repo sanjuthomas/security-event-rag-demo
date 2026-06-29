@@ -111,6 +111,24 @@ _ENTITY_ID_PATTERN = re.compile(
     r"(\d{8}-[A-Z0-9_]+-[IP]-\d+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})",
     re.IGNORECASE,
 )
+_SEQUENCE_PAYMENT_ID_PATTERN = re.compile(
+    r"\d{8}-[A-Z0-9_]+-P-\d+",
+    re.IGNORECASE,
+)
+_SEQUENCE_INSTRUCTION_ID_PATTERN = re.compile(
+    r"\d{8}-[A-Z0-9_]+-I-\d+",
+    re.IGNORECASE,
+)
+_INSTRUCTION_APPROVER_VIA_PAYMENT = re.compile(
+    r"approv\w*\s+of\s+(?:the\s+)?instruction|"
+    r"instruction\s+approv|"
+    r"instruction\s+(?:used\s+by|for|backing|linked\s+to|associated\s+with)\s+payment",
+    re.IGNORECASE,
+)
+_PAYMENT_APPROVER_QUESTION = re.compile(
+    r"(?:who\s+)?approv\w*\s+(?:the\s+)?payment|payment\s+approv",
+    re.IGNORECASE,
+)
 
 _MAX_CYPHER_LEN = 4096
 
@@ -415,11 +433,43 @@ def _is_subordinate_approver_question(question: str) -> bool:
     )
 
 
+def extract_payment_ids(text: str) -> list[str]:
+    """Return sequence payment IDs (-P-) in order of appearance."""
+    return list(dict.fromkeys(match.group(0) for match in _SEQUENCE_PAYMENT_ID_PATTERN.finditer(text)))
+
+
+def extract_instruction_ids(text: str) -> list[str]:
+    """Return sequence instruction IDs (-I-) in order of appearance."""
+    return list(
+        dict.fromkeys(match.group(0) for match in _SEQUENCE_INSTRUCTION_ID_PATTERN.finditer(text))
+    )
+
+
+def is_instruction_approver_via_payment_question(question: str) -> bool:
+    """Approver of the backing instruction when the question anchors on a payment ID."""
+    q = question.lower()
+    if "approv" not in q or "instruction" not in q:
+        return False
+    if not extract_payment_ids(question):
+        return False
+    if _PAYMENT_APPROVER_QUESTION.search(question) and not _INSTRUCTION_APPROVER_VIA_PAYMENT.search(
+        question
+    ):
+        return False
+    if _INSTRUCTION_APPROVER_VIA_PAYMENT.search(question):
+        return True
+    return "payment" in q and not extract_instruction_ids(question)
+
+
 def _is_instruction_approval_lookup(question: str) -> bool:
     q = question.lower()
     if "approv" not in q:
         return False
+    if is_instruction_approver_via_payment_question(question):
+        return False
     if "payment" in q and "instruction" not in q:
+        return False
+    if extract_payment_ids(question) and not extract_instruction_ids(question):
         return False
     return bool(_ENTITY_ID_PATTERN.search(question)) or "instruction" in q
 
@@ -427,6 +477,8 @@ def _is_instruction_approval_lookup(question: str) -> bool:
 def _is_payment_approval_lookup(question: str, *, mode: str) -> bool:
     q = question.lower()
     if "approv" not in q:
+        return False
+    if is_instruction_approver_via_payment_question(question):
         return False
     if "instruction" in q and "payment" not in q:
         return False
@@ -444,6 +496,25 @@ OPTIONAL MATCH (approverUser:User {{user_id: v.approver_user_id}})
 RETURN v.instruction_id, v.status, v.approved_at,
        coalesce(approverUser.display_name, v.approver_user_id, '') AS approver_display,
        v.authorization_summary, v.authorization_basis
+LIMIT 1""",
+        ),
+    ]
+
+
+def _instruction_approver_via_payment_queries(payment_id: str) -> list[tuple[str, str]]:
+    return [
+        (
+            "instruction_approver_via_payment",
+            f"""MATCH (i:Instruction)-[:HAS_PAYMENT]->(p:Payment {{payment_id: '{payment_id}'}})
+MATCH (i)-[:CURRENT]->(v:InstructionVersion)
+OPTIONAL MATCH (approverUser:User {{user_id: v.approver_user_id}})
+RETURN p.payment_id AS payment_id,
+       v.instruction_id AS instruction_id,
+       v.status AS status,
+       v.approved_at AS approved_at,
+       coalesce(approverUser.display_name, v.approver_user_id, '') AS approver_display,
+       v.authorization_summary AS authorization_summary,
+       v.authorization_basis AS authorization_basis
 LIMIT 1""",
         ),
     ]
@@ -619,10 +690,15 @@ def plan_graph_queries(question: str, *, mode: str) -> list[tuple[str, str]] | N
     if mode == "instructions" and _is_subordinate_approver_question(question):
         return _instruction_subordinate_approver_queries()
 
+    if is_instruction_approver_via_payment_question(question):
+        payment_ids = extract_payment_ids(question)
+        if payment_ids:
+            return _instruction_approver_via_payment_queries(payment_ids[0])
+
     if mode == "instructions" and _is_instruction_approval_lookup(question):
-        entity_ids = extract_entity_ids(question)
-        if entity_ids:
-            return _instruction_approval_lookup_queries(entity_ids[0])
+        instruction_ids = extract_instruction_ids(question) or extract_entity_ids(question)
+        if instruction_ids:
+            return _instruction_approval_lookup_queries(instruction_ids[0])
 
     if mode in ("payments", "events") and _is_payment_approval_lookup(question, mode=mode):
         if not is_payments_for_instruction_question(question):

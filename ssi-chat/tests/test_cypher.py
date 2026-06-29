@@ -157,6 +157,22 @@ class TestPlanGraphQueries:
         assert pid in planned[0][1]
         assert "APPROVE_PAYMENT" in planned[0][1]
 
+    def test_instruction_approver_via_payment(self) -> None:
+        pid = "20260629-FICC-P-1"
+        question = (
+            f"Can you tell me the approver of the instruction used by payment {pid}?"
+        )
+        planned = plan_graph_queries(question, mode="payments")
+        assert planned is not None
+        assert planned[0][0] == "instruction_approver_via_payment"
+        assert pid in planned[0][1]
+        assert "HAS_PAYMENT" in planned[0][1]
+        assert "approver_display" in planned[0][1]
+        assert "APPROVE_PAYMENT" not in planned[0][1]
+
+        assert plan_graph_queries(question, mode="events") is not None
+        assert plan_graph_queries(question, mode="events")[0][0] == "instruction_approver_via_payment"
+
     def test_max_payments_per_instruction(self) -> None:
         planned = plan_graph_queries(
             "Which instruction has the maximum number of payments?",
